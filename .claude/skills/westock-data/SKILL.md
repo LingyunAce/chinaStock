@@ -212,6 +212,12 @@ westock-data technical sh600000 --group macd --start 2026-02-01 --end 2026-03-01
 
 **指标分组**：`ma`(均线)、`macd`、`kdj`、`rsi`、`boll`(布林带)、`bias`(乖离率)、`wr`(威廉)、`dmi`(SAR/DMI)、`all`(全部)
 
+> 🎯 **金叉/死叉/多空力道分析必读**：当用户问"有没有金叉信号"、"是不是死叉"、"什么时候能买"、"多空力道如何"、"技术面如何"时，**必须参考** [references/technical-cross-signals.md](./references/technical-cross-signals.md) — 该文档提供：
+>   - 8 大主流金叉指标（MACD/KDJ/MA/EMA/DMI/TRIX/PSY 等）扫描矩阵
+>   - 标准化输出模板（金叉强度评分 0-10 分）
+>   - 4 大典型场景识别（强势金叉 / 超卖反弹 / 死叉预警 / 假金叉陷阱）
+>   - 易犯错误清单（避免单一指标误判）
+
 ### 10. 筹码成本
 
 > ⚠️ 仅支持沪深A股（sh/sz/bj）
@@ -414,6 +420,8 @@ K线分析：kline sz002714 --period day --limit 20 → 提取 volume 计算统�
 龙虎榜：lhb → 查全市场龙虎榜（仅A股，机构榜/游资榜/活跃席位/高胜率买入/高胜率席位）
 指数/板块：search 半导体 --sector → quote pt01801081 → 查行情
 技术指标：technical sh600000 --group macd,rsi → 判断金叉/死叉、超买/超卖
+金叉信号扫描：technical sh600198 --group all → **必读** [references/technical-cross-signals.md](./references/technical-cross-signals.md) → 8大主流金叉指标矩阵扫描（MACD/KDJ/MA/EMA/DMI/TRIX/PSY等）→ 综合评分0-10分 → 输出标准化金叉强度判断
+多空力道分析：technical sh600000 --group all → 重点看 DMI（PDI/MDI/ADX）+ MACD柱状 → 判断多空力道
 ETF分析：etf sh510300 → etf-holdings sh510300 → 查持仓明细
 新闻详情：news sh600000 --limit 20 --type 2 → newsdetail <id> → 查新闻/研报正文
 市场资讯：marketnews hs → 查沪深整体市场动态
@@ -439,6 +447,8 @@ ST警示：risk sh600000 --types st → 查看ST风险警示股票
 ```
 
 **完整分析场景（33个）参见 [references/scenarios-guide.md](./references/scenarios-guide.md)**
+
+**金叉/死叉/多空力道分析完整框架参见 [references/technical-cross-signals.md](./references/technical-cross-signals.md)**
 
 **详细返回格式、字段说明、分析模板参见 [references/ai_usage_guide.md](./references/ai_usage_guide.md)**
 
