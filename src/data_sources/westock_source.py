@@ -101,7 +101,13 @@ def _call_westock(args: list[str], timeout: int = 30) -> str:
     cmd = ["node", str(_WESTOCK_CLI), *args]
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
         )
     except subprocess.TimeoutExpired as e:
         raise RuntimeError(f"westock 调用超时: {' '.join(args)}") from e
@@ -109,7 +115,7 @@ def _call_westock(args: list[str], timeout: int = 30) -> str:
         raise RuntimeError(
             f"westock 调用失败 (rc={result.returncode}): {result.stderr.strip()[:500]}"
         )
-    return result.stdout
+    return result.stdout or ""
 
 
 # ----------------------------- 主适配器 -----------------------------

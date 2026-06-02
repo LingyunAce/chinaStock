@@ -49,17 +49,29 @@ def lhb_signal_score(
         return pd.DataFrame(columns=["date", "symbol", "name", "score", "value"])
 
     out = df.copy()
-    out["net_buy_amount"] = pd.to_numeric(out.get("net_buy_amount", 0), errors="coerce").fillna(0)
-    out["pct_change"] = pd.to_numeric(out.get("pct_change", 0), errors="coerce").fillna(0)
+    # 安全取数：缺列时用 0 填充并强制成 Series（避免 int 标量 .fillna() 崩）
+    if "net_buy_amount" in out.columns:
+        out["net_buy_amount"] = (
+            pd.to_numeric(out["net_buy_amount"], errors="coerce").fillna(0)
+        )
+    else:
+        out["net_buy_amount"] = 0.0
+    if "pct_change" in out.columns:
+        out["pct_change"] = (
+            pd.to_numeric(out["pct_change"], errors="coerce").fillna(0)
+        )
+    else:
+        out["pct_change"] = 0.0
     out["pct_change_abs"] = out["pct_change"].abs()
 
     score = pd.Series(0.0, index=out.index)
     score += (out["net_buy_amount"] > amount_threshold).astype(float) * 0.5
     score += (out["pct_change_abs"] < 5.0).astype(float) * 0.2
-    # 多次上榜（这里以"上榜次数"近似；AKShare 一次返回当日上榜，1 票多次出现在不同列中）
-    list_counts = out.groupby("symbol").size()
-    multi = out["symbol"].map(list_counts) > 1
-    score += multi.astype(float) * 0.3
+    # 多次上榜：1 票多次出现（按 symbol group 计数 > 1）
+    if "symbol" in out.columns:
+        list_counts = out.groupby("symbol").size()
+        multi = out["symbol"].map(list_counts) > 1
+        score += multi.astype(float) * 0.3
 
     out["score"] = score.clip(0, 1)
     out["value"] = out["score"]

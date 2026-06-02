@@ -1,0 +1,25 @@
+{
+  "symbol": "SH600198",
+  "name": "大唐电信",
+  "westock_code": "sh600198",
+  "analysis_date": "2026-06-02",
+  "window": [
+    "2026-05-03",
+    "2026-06-02"
+  ],
+  "recent_trade_date": "2026-06-01",
+  "on_lhb_westock": false,
+  "sectors_count": 0,
+  "sectors": [],
+  "sentiment": {
+    "date": "2026-06-01",
+    "limit_up_count": 120,
+    "max_consecutive": 4,
+    "broken_ratio": 0.3103,
+    "sentiment": "overheat"
+  },
+  "data_sources_status": {
+    "westock": "ok",
+    "akshare": "network_unreachable"
+  }
+}

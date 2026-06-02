@@ -22,19 +22,54 @@ LHB_RENAME: dict[str, str] = {
     "代码": "code",
     "名称": "name",
     "上榜日期": "date",
+    "最近上榜日": "recent_lhb_date",
     "解读": "interpretation",
     "买方营业部": "buyer_branch",
     "卖方营业部": "seller_branch",
     "净买入额": "net_buy_amount",
+    "龙虎榜净买额": "net_buy_amount",       # AKShare stock_lhb_stock_statistic_em 字段
     "买入金额": "buy_amount",
+    "龙虎榜买入额": "buy_amount",
     "卖出金额": "sell_amount",
+    "龙虎榜卖出额": "sell_amount",
     "成交金额": "trade_amount",
+    "龙虎榜总成交额": "trade_amount",
     "涨跌幅": "pct_change",
+    "收盘价": "close_price",
+    "上榜次数": "lhb_count",
+    "买方机构次数": "inst_buy_count",
+    "卖方机构次数": "inst_sell_count",
+    "机构买入净额": "inst_net_buy",
+    "机构买入总额": "inst_total_buy",
+    "机构卖出总额": "inst_total_sell",
+    "近1个月涨跌幅": "pct_1m",
+    "近3个月涨跌幅": "pct_3m",
+    "近6个月涨跌幅": "pct_6m",
+    "近1年涨跌幅": "pct_1y",
     "上榜后1日": "rank_after_1d",
     "上榜后2日": "rank_after_2d",
     "上榜后5日": "rank_after_5d",
     "上榜后10日": "rank_after_10d",
 }
+
+
+def _safe_chinastock(x) -> str | None:
+    """把 AKShare 拿到的 code 字段安全转 chinaStock 形式。
+
+    AKShare 涨停池等接口可能混入 5 位基金/B 股代码，统一返回 None 跳过。
+    """
+    if pd.isna(x):
+        return None
+    s = str(x).strip()
+    if not s:
+        return None
+    # 5 位代码：基金 / 指数 / B 股 — 不是 A 股，不转
+    if s.isdigit() and len(s) == 5:
+        return None
+    try:
+        return to_chinastock(s.zfill(6))
+    except ValueError:
+        return None
 
 
 def normalize_lhb(df: pd.DataFrame) -> pd.DataFrame:
@@ -47,9 +82,9 @@ def normalize_lhb(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     out = df.rename(columns=LHB_RENAME)
     if "code" in out.columns:
-        out["symbol"] = out["code"].apply(
-            lambda x: to_chinastock(str(x).zfill(6)) if pd.notna(x) else None
-        )
+        out["symbol"] = out["code"].apply(_safe_chinastock)
+        # 过滤非 A 股代码（基金 / B 股等）
+        out = out[out["symbol"].notna()].copy()
     if "date" in out.columns:
         out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     return out
@@ -83,9 +118,9 @@ def normalize_limit_up(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     out = df.rename(columns=LIMIT_UP_RENAME)
     if "code" in out.columns:
-        out["symbol"] = out["code"].apply(
-            lambda x: to_chinastock(str(x).zfill(6)) if pd.notna(x) else None
-        )
+        out["symbol"] = out["code"].apply(_safe_chinastock)
+        # 过滤非 A 股代码（基金 / B 股等）
+        out = out[out["symbol"].notna()].copy()
     return out
 
 
@@ -135,9 +170,8 @@ def normalize_sector_constituents(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     out = df.rename(columns=SECTOR_CONSTITUENT_RENAME)
     if "code" in out.columns:
-        out["symbol"] = out["code"].apply(
-            lambda x: to_chinastock(str(x).zfill(6)) if pd.notna(x) else None
-        )
+        out["symbol"] = out["code"].apply(_safe_chinastock)
+        out = out[out["symbol"].notna()].copy()
     return out
 
 
