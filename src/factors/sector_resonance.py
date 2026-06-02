@@ -3,6 +3,7 @@
 识别一只票所在的多个概念板块中，N 日内板块整体强势的板块数，
 作为"主线确认"信号。
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -57,7 +58,9 @@ def sector_resonance_factor(
         if perf.empty or "pct_change" not in perf.columns:
             continue
         try:
-            cum = float(pd.to_numeric(perf["pct_change"], errors="coerce").fillna(0).sum())
+            cum = float(
+                pd.to_numeric(perf["pct_change"], errors="coerce").fillna(0).sum()
+            )
         except Exception:  # noqa: BLE001
             continue
         if cum >= pct_threshold:

@@ -4,6 +4,7 @@ chinaStock 内部约定：带前缀大写形式（"SH600519" / "SZ000001" / "BJ8
 遵循 README 命名约定。westock-data CLI 用小写（"sh600519"），
 AKShare 多数接口只用 6 位（"600519"）。边界处统一在此模块转换。
 """
+
 from __future__ import annotations
 
 import re
@@ -38,7 +39,9 @@ def to_bare(symbol: str) -> str:
 def _infer_exchange(six_digit: str) -> str:
     """从 6 位代码推断交易所前缀。"""
     if len(six_digit) != 6 or not six_digit.isdigit():
-        raise ValueError(f"无法推断交易所：6 位数字代码应为 6 位数字，得到 {six_digit!r}")
+        raise ValueError(
+            f"无法推断交易所：6 位数字代码应为 6 位数字，得到 {six_digit!r}"
+        )
     first = six_digit[0]
     if first not in _EXCHANGE_BY_FIRST:
         raise ValueError(f"无法识别股票代码首位 {first!r}（{six_digit}）")
@@ -58,7 +61,11 @@ def to_chinastock(symbol: str) -> str:
     lower = s.lower()
     for prefix_upper, prefix_lower in zip(_PREFIX_UPPER, _PREFIX_LOWER):
         if lower.startswith(prefix_lower):
-            bare = s[len(prefix_lower):] if lower.startswith(prefix_lower) else s[len(prefix_upper):]
+            bare = (
+                s[len(prefix_lower) :]
+                if lower.startswith(prefix_lower)
+                else s[len(prefix_upper) :]
+            )
             return f"{prefix_upper}{bare}"
     bare = to_bare(s)
     if not bare.isdigit() or len(bare) != 6:

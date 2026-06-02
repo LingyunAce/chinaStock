@@ -8,6 +8,7 @@
 
 约定：缓存目录为 `data/cache/`（已被 .gitignore 忽略）。
 """
+
 from __future__ import annotations
 
 import hashlib

@@ -1,4 +1,5 @@
 """测试 src.data_layer.symbols 转换逻辑。"""
+
 from __future__ import annotations
 
 import pytest

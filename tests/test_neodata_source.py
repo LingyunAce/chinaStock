@@ -1,4 +1,5 @@
 """测试 src.data_sources.neodata_source 的 token 管理与 HTTP 调用。"""
+
 from __future__ import annotations
 
 import json
@@ -87,7 +88,9 @@ class TestNaturalQuery:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": "ok"}
         mock_resp.raise_for_status = MagicMock()
-        with patch("src.data_sources.neodata_source.requests.post", return_value=mock_resp) as m:
+        with patch(
+            "src.data_sources.neodata_source.requests.post", return_value=mock_resp
+        ) as m:
             src.natural_query("贵州茅台 2025-12-15 收盘价")
             # 验证调用参数
             args, kwargs = m.call_args
@@ -109,7 +112,9 @@ class TestGetQuoteForValidation:
         src = NeodataSource(token="test-token")
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": {"close": 1500, "volume": 1000}}
-        with patch("src.data_sources.neodata_source.requests.post", return_value=mock_resp):
+        with patch(
+            "src.data_sources.neodata_source.requests.post", return_value=mock_resp
+        ):
             df = src.get_quote_for_validation("SH600519", "2025-12-15")
             assert len(df) == 1
             assert df["date"].iloc[0] == "2025-12-15"

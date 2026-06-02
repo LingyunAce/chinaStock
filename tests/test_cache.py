@@ -1,4 +1,5 @@
 """测试 src.data_layer.cache 缓存行为。"""
+
 from __future__ import annotations
 
 import time

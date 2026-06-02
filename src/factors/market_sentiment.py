@@ -3,6 +3,7 @@
 把 `integrations.limit_up.market_sentiment_score` 的 dict 拍扁为 DataFrame，
 方便与其他因子对齐做横截面研究。
 """
+
 from __future__ import annotations
 
 import pandas as pd

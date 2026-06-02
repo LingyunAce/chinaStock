@@ -4,6 +4,7 @@
 - institutional_net_buy: 个股当日机构净买入额（来自龙虎榜）
 - lhb_signal_score: 龙虎榜上榜信号强度打分（多维加权）
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -24,10 +25,14 @@ def institutional_net_buy(
     """
     df = get_lhb(symbol=None, date=date, source=source)
     if df.empty:
-        return pd.DataFrame(columns=["date", "symbol", "name", "net_buy_amount", "value"])
+        return pd.DataFrame(
+            columns=["date", "symbol", "name", "net_buy_amount", "value"]
+        )
     keep = [c for c in ("date", "symbol", "name", "net_buy_amount") if c in df.columns]
     out = df[keep].copy()
-    out["value"] = pd.to_numeric(out.get("net_buy_amount", 0), errors="coerce").fillna(0)
+    out["value"] = pd.to_numeric(out.get("net_buy_amount", 0), errors="coerce").fillna(
+        0
+    )
     return out
 
 
@@ -51,15 +56,13 @@ def lhb_signal_score(
     out = df.copy()
     # 安全取数：缺列时用 0 填充并强制成 Series（避免 int 标量 .fillna() 崩）
     if "net_buy_amount" in out.columns:
-        out["net_buy_amount"] = (
-            pd.to_numeric(out["net_buy_amount"], errors="coerce").fillna(0)
-        )
+        out["net_buy_amount"] = pd.to_numeric(
+            out["net_buy_amount"], errors="coerce"
+        ).fillna(0)
     else:
         out["net_buy_amount"] = 0.0
     if "pct_change" in out.columns:
-        out["pct_change"] = (
-            pd.to_numeric(out["pct_change"], errors="coerce").fillna(0)
-        )
+        out["pct_change"] = pd.to_numeric(out["pct_change"], errors="coerce").fillna(0)
     else:
         out["pct_change"] = 0.0
     out["pct_change_abs"] = out["pct_change"].abs()

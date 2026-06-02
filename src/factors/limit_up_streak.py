@@ -2,6 +2,7 @@
 
 记录当日涨停池中各连板高度的票数，用于跟踪题材炒作周期。
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -18,7 +19,9 @@ def limit_up_streak_distribution(date: str) -> pd.DataFrame:
     pool = get_limit_up_pool(date)
     if pool.empty or "consecutive_boards" not in pool.columns:
         return pd.DataFrame(columns=["date", "consecutive_boards", "count", "value"])
-    counts_series = pool["consecutive_boards"].fillna(0).astype(int).value_counts().sort_index()
+    counts_series = (
+        pool["consecutive_boards"].fillna(0).astype(int).value_counts().sort_index()
+    )
     out = counts_series.reset_index()
     out.columns = ["consecutive_boards", "count"]
     out["date"] = date

@@ -8,6 +8,7 @@
     streak = get_limit_up_streak("2025-12-15", min_boards=2)
     score = market_sentiment_score("2025-12-15")
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -32,7 +33,11 @@ def get_limit_up_pool(
     :return: DataFrame，列：`date, symbol, name, pct_change, consecutive_boards, ...`
     """
     src = source or AkShareSource()
-    cache_name = "akshare.limit_up" if src.role == SourceRole.SUPPLEMENTARY else f"{src.name}.limit_up"
+    cache_name = (
+        "akshare.limit_up"
+        if src.role == SourceRole.SUPPLEMENTARY
+        else f"{src.name}.limit_up"
+    )
     params = {"date": date}
     return cached_call(
         cache_name,

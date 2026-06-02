@@ -1,4 +1,5 @@
 """测试 src.data_layer.normalize 字段归一化。"""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -75,8 +76,16 @@ class TestNormalizeLimitUp:
             ]
         )
         out = normalize_limit_up(df)
-        for col in ("symbol", "name", "pct_change", "price", "amount",
-                    "sealed_amount", "broken_count", "consecutive_boards"):
+        for col in (
+            "symbol",
+            "name",
+            "pct_change",
+            "price",
+            "amount",
+            "sealed_amount",
+            "broken_count",
+            "consecutive_boards",
+        ):
             assert col in out.columns, f"missing column: {col}"
 
     def test_symbol_with_prefix(self):
@@ -105,8 +114,16 @@ class TestNormalizeSectorOHLCV:
             ]
         )
         out = normalize_sector_ohlcv(df)
-        for col in ("date", "open", "close", "high", "low",
-                    "pct_change", "volume", "amount"):
+        for col in (
+            "date",
+            "open",
+            "close",
+            "high",
+            "low",
+            "pct_change",
+            "volume",
+            "amount",
+        ):
             assert col in out.columns
 
     def test_date_format(self):
@@ -121,9 +138,7 @@ class TestNormalizeSectorConstituents:
 
     def test_rename_with_symbol(self):
         df = pd.DataFrame(
-            [
-                {"代码": "300750", "名称": "宁德时代", "最新价": 200.0, "涨跌幅": 5.0}
-            ]
+            [{"代码": "300750", "名称": "宁德时代", "最新价": 200.0, "涨跌幅": 5.0}]
         )
         out = normalize_sector_constituents(df)
         assert "symbol" in out.columns

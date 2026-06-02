@@ -3,6 +3,7 @@
 业务层只依赖此接口，不直接 import 具体数据源。
 新增数据源时：实现 `DataSource` 子类，标注 `role` 即可。
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -14,9 +15,9 @@ import pandas as pd
 class SourceRole(str, Enum):
     """数据源角色。"""
 
-    PRIMARY = "primary"               # 主力源（westock-data, neodata）
-    SUPPLEMENTARY = "supplementary"   # 补充源（AKShare）
-    VALIDATION = "validation"         # 交叉验证用
+    PRIMARY = "primary"  # 主力源（westock-data, neodata）
+    SUPPLEMENTARY = "supplementary"  # 补充源（AKShare）
+    VALIDATION = "validation"  # 交叉验证用
 
 
 class DataSource(ABC):

@@ -1,4 +1,5 @@
 """测试 src.factors 因子函数（mock 数据，无网络）。"""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -36,10 +37,30 @@ def _mock_lhb_df() -> pd.DataFrame:
 def _mock_limit_up_df() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"date": "2025-12-15", "symbol": "SH600519", "name": "A", "consecutive_boards": 1},
-            {"date": "2025-12-15", "symbol": "SH600000", "name": "B", "consecutive_boards": 2},
-            {"date": "2025-12-15", "symbol": "SZ000001", "name": "C", "consecutive_boards": 2},
-            {"date": "2025-12-15", "symbol": "SH601318", "name": "D", "consecutive_boards": 3},
+            {
+                "date": "2025-12-15",
+                "symbol": "SH600519",
+                "name": "A",
+                "consecutive_boards": 1,
+            },
+            {
+                "date": "2025-12-15",
+                "symbol": "SH600000",
+                "name": "B",
+                "consecutive_boards": 2,
+            },
+            {
+                "date": "2025-12-15",
+                "symbol": "SZ000001",
+                "name": "C",
+                "consecutive_boards": 2,
+            },
+            {
+                "date": "2025-12-15",
+                "symbol": "SH601318",
+                "name": "D",
+                "consecutive_boards": 3,
+            },
         ]
     )
 
@@ -143,16 +164,19 @@ class TestSectorResonanceFactor:
             "src.factors.sector_resonance.find_symbol_sectors",
             return_value=["机器人", "锂电池"],
         ):
+
             def fake_perf(sec, start, end, **kw):
                 if sec == "机器人":
                     return pd.DataFrame({"pct_change": [1.0, 1.5, 1.0]})  # 累计 3.5%
-                return pd.DataFrame({"pct_change": [0.5, 0.5, 0.5]})      # 累计 1.5%
+                return pd.DataFrame({"pct_change": [0.5, 0.5, 0.5]})  # 累计 1.5%
 
             with patch(
                 "src.factors.sector_resonance.get_sector_performance",
                 side_effect=fake_perf,
             ):
-                out = sector_resonance_factor("SH300750", "2025-12-15", pct_threshold=3.0)
+                out = sector_resonance_factor(
+                    "SH300750", "2025-12-15", pct_threshold=3.0
+                )
                 assert out["sector_count"].iloc[0] == 2
                 assert out["strong_count"].iloc[0] == 1  # 只有机器人 >= 3%
                 assert out["value"].iloc[0] == pytest.approx(0.5)

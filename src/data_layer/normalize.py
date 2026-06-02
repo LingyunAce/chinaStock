@@ -10,6 +10,7 @@
 2. 把代码列（`code` / `代码`）转为 `SH600519`
 3. 把日期列归一为 `YYYY-MM-DD` 字符串
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -27,7 +28,7 @@ LHB_RENAME: dict[str, str] = {
     "买方营业部": "buyer_branch",
     "卖方营业部": "seller_branch",
     "净买入额": "net_buy_amount",
-    "龙虎榜净买额": "net_buy_amount",       # AKShare stock_lhb_stock_statistic_em 字段
+    "龙虎榜净买额": "net_buy_amount",  # AKShare stock_lhb_stock_statistic_em 字段
     "买入金额": "buy_amount",
     "龙虎榜买入额": "buy_amount",
     "卖出金额": "sell_amount",
@@ -86,7 +87,9 @@ def normalize_lhb(df: pd.DataFrame) -> pd.DataFrame:
         # 过滤非 A 股代码（基金 / B 股等）
         out = out[out["symbol"].notna()].copy()
     if "date" in out.columns:
-        out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.strftime(
+            "%Y-%m-%d"
+        )
     return out
 
 
@@ -147,7 +150,9 @@ def normalize_sector_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     out = df.rename(columns=SECTOR_RENAME)
     if "date" in out.columns:
-        out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.strftime(
+            "%Y-%m-%d"
+        )
     return out
 
 

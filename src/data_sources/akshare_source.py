@@ -9,6 +9,7 @@
 注意：AKShare 接口偶发返回字段名与文档不一致（同一接口不同时间可能改字段），
 归一化层（src.data_layer.normalize）做兼容；本模块不做列名假设。
 """
+
 from __future__ import annotations
 
 import warnings
@@ -28,9 +29,7 @@ from src.data_sources.base import DataSource, SourceRole
 try:
     import akshare as ak
 except ImportError as e:  # pragma: no cover - 由 requirements.txt 锁定
-    raise ImportError(
-        "akshare 未安装，请先 `pip install -r requirements.txt`"
-    ) from e
+    raise ImportError("akshare 未安装，请先 `pip install -r requirements.txt`") from e
 
 
 def _safe_call(func, *args, **kwargs) -> pd.DataFrame:
@@ -107,7 +106,9 @@ class AkShareSource(DataSource):
         raw = _safe_call(ak.stock_board_concept_cons_em, symbol=sector)
         return normalize_sector_constituents(raw)
 
-    def get_sector_perf(self, sector: str, start: str, end: str, **kw: Any) -> pd.DataFrame:
+    def get_sector_perf(
+        self, sector: str, start: str, end: str, **kw: Any
+    ) -> pd.DataFrame:
         """概念板块日 K 线（按 period='daily'）。"""
         start_ymd = start.replace("-", "")
         end_ymd = end.replace("-", "")
@@ -122,7 +123,9 @@ class AkShareSource(DataSource):
         return normalize_sector_ohlcv(raw)
 
     # ---------------------- 交叉验证 ----------------------
-    def get_quote_for_validation(self, symbol: str, date: str, **kw: Any) -> pd.DataFrame:
+    def get_quote_for_validation(
+        self, symbol: str, date: str, **kw: Any
+    ) -> pd.DataFrame:
         """拉 AKShare 个股日 K（与 westock 同口径），用于跨源数据校验。"""
         code = to_akshare(symbol)
         end_dt = pd.Timestamp(date)
@@ -139,6 +142,7 @@ class AkShareSource(DataSource):
             return raw
         # 归一化：用通用重命名（见 normalize_sector_ohlcv 的列名表已够用）
         from src.data_layer.symbols import to_chinastock
+
         out = raw.rename(
             columns={
                 "日期": "date",
@@ -155,7 +159,9 @@ class AkShareSource(DataSource):
             }
         )
         if "date" in out.columns:
-            out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+            out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.strftime(
+                "%Y-%m-%d"
+            )
         out["symbol"] = to_chinastock(symbol)
         return out
 

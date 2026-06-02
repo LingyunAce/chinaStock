@@ -5,6 +5,7 @@
     df = get_lhb("SH600519", "2025-12-15")              # 单只票当日龙虎榜
     report = explain_anomaly("SH600519", "2025-12-15")  # 异动归因报告
 """
+
 from __future__ import annotations
 
 import pandas as pd

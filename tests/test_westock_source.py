@@ -1,4 +1,5 @@
 """测试 src.data_sources.westock_source 的 markdown 解析与字段映射。"""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -77,7 +78,9 @@ class TestWestockSource:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | sh600519 | 贵州茅台 | 3 | 5 | 1.5亿 | 4.48% | 2亿 | 8000万 | 9.52% |
 """
-        with patch("src.data_sources.westock_source._call_westock", return_value=sample):
+        with patch(
+            "src.data_sources.westock_source._call_westock", return_value=sample
+        ):
             src = WestockSource()
             df = src.get_lhb(symbol=None, date="2025-12-15")
             assert not df.empty
@@ -92,7 +95,9 @@ class TestWestockSource:
 | sh600519 | 茅台 | 1.5亿 |
 | sz000001 | 平安 | 2000万 |
 """
-        with patch("src.data_sources.westock_source._call_westock", return_value=sample):
+        with patch(
+            "src.data_sources.westock_source._call_westock", return_value=sample
+        ):
             src = WestockSource()
             df = src.get_lhb(symbol="SH600519", date="2025-12-15")
             assert len(df) == 1
@@ -108,7 +113,9 @@ class TestWestockSource:
 | --- | --- | --- | --- | --- | --- | --- |
 | 2025-12-15 | 100 | 105 | 110 | 99 | 1000 | 100000 |
 """
-        with patch("src.data_sources.westock_source._call_westock", return_value=sample):
+        with patch(
+            "src.data_sources.westock_source._call_westock", return_value=sample
+        ):
             src = WestockSource()
             df = src.get_quote_for_validation("SH600519", "2025-12-15")
             assert "close" in df.columns  # 'last' 已重命名

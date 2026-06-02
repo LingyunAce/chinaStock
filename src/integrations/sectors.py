@@ -9,6 +9,7 @@
     perf = get_sector_performance("机器人", "2025-11-01", "2025-12-15")
     sectors = find_symbol_sectors("SH600519")
 """
+
 from __future__ import annotations
 
 import warnings
@@ -177,12 +178,19 @@ def detect_sector_resonance(
         if perf.empty or "pct_change" not in perf.columns:
             continue
         try:
-            cum = float(pd.to_numeric(perf["pct_change"], errors="coerce").fillna(0).sum())
+            cum = float(
+                pd.to_numeric(perf["pct_change"], errors="coerce").fillna(0).sum()
+            )
         except Exception:  # noqa: BLE001
             continue
         if cum >= pct_threshold:
             hits.append(
-                {"sector": sec, "cum_pct_change": round(cum, 2), "symbol": symbol, "date": date}
+                {
+                    "sector": sec,
+                    "cum_pct_change": round(cum, 2),
+                    "symbol": symbol,
+                    "date": date,
+                }
             )
     return hits
 

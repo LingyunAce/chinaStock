@@ -1,4 +1,5 @@
 """测试 src.integrations.sectors 的 find_symbol_sectors / detect_sector_resonance。"""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -21,10 +22,14 @@ class TestFindSymbolSectors:
 
         def fake_constituents(sector, **kw):
             if sector == "B概念":
-                return pd.DataFrame({"symbol": ["SH600519", "SZ000001"], "name": ["x", "y"]})
+                return pd.DataFrame(
+                    {"symbol": ["SH600519", "SZ000001"], "name": ["x", "y"]}
+                )
             return pd.DataFrame(columns=["symbol", "name"])
 
-        with patch("src.integrations.sectors._list_all_concept_names", return_value=fake_names):
+        with patch(
+            "src.integrations.sectors._list_all_concept_names", return_value=fake_names
+        ):
             with patch(
                 "src.integrations.sectors.get_sector_constituents",
                 side_effect=fake_constituents,
@@ -35,7 +40,9 @@ class TestFindSymbolSectors:
     def test_max_scan_limits(self):
         """max_scan=1 时只扫前 1 个。"""
         fake_names = ["A", "B"]
-        with patch("src.integrations.sectors._list_all_concept_names", return_value=fake_names):
+        with patch(
+            "src.integrations.sectors._list_all_concept_names", return_value=fake_names
+        ):
             with patch(
                 "src.integrations.sectors.get_sector_constituents",
                 return_value=pd.DataFrame(columns=["symbol", "name"]),
@@ -61,7 +68,9 @@ class TestDetectSectorResonance:
             "src.integrations.sectors.find_symbol_sectors",
             return_value=["A", "B", "C"],
         ):
-            with patch("src.integrations.sectors.get_sector_performance", side_effect=fake_perf):
+            with patch(
+                "src.integrations.sectors.get_sector_performance", side_effect=fake_perf
+            ):
                 out = detect_sector_resonance(
                     "SH600519", "2025-12-15", pct_threshold=3.0, lookback_days=5
                 )

@@ -12,6 +12,7 @@ westock 字段（中文）→ chinaStock snake_case 的映射：
 约定：westock 内部代码为小写 `sh600519`，通过 `to_westock()` 转换。
 输出：snake_case + `SH600519` 形式（与其他源一致）。
 """
+
 from __future__ import annotations
 
 import shutil
@@ -48,9 +49,7 @@ def _parse_markdown_table(text: str) -> pd.DataFrame:
     if len(table_lines) < 2:
         return pd.DataFrame()
     # 跳过表头分隔行（"| --- | --- |"）
-    header = [
-        c.strip() for c in table_lines[0].strip().strip("|").split("|")
-    ]
+    header = [c.strip() for c in table_lines[0].strip().strip("|").split("|")]
     rows: list[list[str]] = []
     for ln in table_lines[2:]:
         cells = [c.strip() for c in ln.strip().strip("|").split("|")]
@@ -136,7 +135,9 @@ class WestockSource(DataSource):
 
         westock 不支持按 code 查单只票，统一拉全市场机构榜。
         """
-        raw_text = _call_westock(["lhb", "--tab", "jg", "--date", date.replace("-", "")])
+        raw_text = _call_westock(
+            ["lhb", "--tab", "jg", "--date", date.replace("-", "")]
+        )
         raw = _parse_markdown_table(raw_text)
         if raw.empty:
             return raw
@@ -225,7 +226,9 @@ class WestockSource(DataSource):
                 continue
         return pd.DataFrame()
 
-    def get_sector_perf(self, sector: str, start: str, end: str, **kw: Any) -> pd.DataFrame:
+    def get_sector_perf(
+        self, sector: str, start: str, end: str, **kw: Any
+    ) -> pd.DataFrame:
         """板块日 K 线。
 
         westock 没有"按 sector 名称查 K 线"——必须先 get_sector_constituents 找到 code，
@@ -238,7 +241,9 @@ class WestockSource(DataSource):
         # 用第一只成分股的 code 作为近似（westock 的 kline 不直接支持板块 K）
         # 严格来说应该用 sector_code 调 kline；这里 fallback 到成分股加权平均
         # TODO: 改进——westock 后续版本若有 sector kline 直接命令则用之
-        sample_code = constituents["symbol"].iloc[0] if "symbol" in constituents.columns else None
+        sample_code = (
+            constituents["symbol"].iloc[0] if "symbol" in constituents.columns else None
+        )
         if sample_code is None:
             return pd.DataFrame()
         westock_code = to_westock(sample_code)
@@ -274,7 +279,9 @@ class WestockSource(DataSource):
         return out
 
     # ---------------------- 交叉验证 ----------------------
-    def get_quote_for_validation(self, symbol: str, date: str, **kw: Any) -> pd.DataFrame:
+    def get_quote_for_validation(
+        self, symbol: str, date: str, **kw: Any
+    ) -> pd.DataFrame:
         """拉 westock 个股 K 线（与 AKShare 同口径），用于跨源数据校验。"""
         westock_code = to_westock(symbol)
         # 拉 ±5 日窗口

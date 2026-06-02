@@ -11,6 +11,7 @@
   → 用于跨源交叉验证
 - 用户可直接调 `natural_query()`（非 ABC 方法）做临时性 NLP 查询
 """
+
 from __future__ import annotations
 
 import json
@@ -64,7 +65,9 @@ def _read_token() -> Optional[str]:
 def save_token(token: str) -> None:
     """保存 token 到缓存文件（权限 600）。"""
     TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    TOKEN_FILE.write_text(json.dumps({"token": token.strip(), "saved_at": int(time.time())}))
+    TOKEN_FILE.write_text(
+        json.dumps({"token": token.strip(), "saved_at": int(time.time())})
+    )
     try:
         TOKEN_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
     except (OSError, NotImplementedError):  # Windows 上 chmod 部分支持
@@ -145,7 +148,9 @@ class NeodataSource(DataSource):
             f"或用 WestockSource 替代。"
         )
 
-    def get_sector_perf(self, sector: str, start: str, end: str, **kw: Any) -> pd.DataFrame:
+    def get_sector_perf(
+        self, sector: str, start: str, end: str, **kw: Any
+    ) -> pd.DataFrame:
         """板块日 K：neodata 不提供结构化接口。"""
         raise NotImplementedError(
             f"neodata 不提供结构化板块 K 线接口。"
@@ -153,14 +158,18 @@ class NeodataSource(DataSource):
             f"做 NLP 查询，或用 AkShareSource 替代。"
         )
 
-    def get_quote_for_validation(self, symbol: str, date: str, **kw: Any) -> pd.DataFrame:
+    def get_quote_for_validation(
+        self, symbol: str, date: str, **kw: Any
+    ) -> pd.DataFrame:
         """交叉验证：neodata 自然语言查询个股行情。
 
         返回 DataFrame（列：date, symbol, price, source_note），结构化程度有限，
         主要用于"是否存在 / 数量级对不对"的交叉验证。
         """
         chinastock = to_chinastock(symbol)
-        result = self._http_post(f"查询 {chinastock} 在 {date} 的收盘价、成交量、成交额")
+        result = self._http_post(
+            f"查询 {chinastock} 在 {date} 的收盘价、成交量、成交额"
+        )
         # neodata 响应结构不固定；尝试提取常见字段，否则把整个 result 平铺到一行
         data = result.get("data", result)
         return pd.DataFrame(
