@@ -36,7 +36,7 @@ def get_lhb(
     """
     src = source or AkShareSource()
     if src.role == SourceRole.SUPPLEMENTARY:
-        cache_name = f"akshare.lhb"
+        cache_name = "akshare.lhb"
     else:
         cache_name = f"{src.name}.lhb"
     params = {"symbol": symbol, "date": date}

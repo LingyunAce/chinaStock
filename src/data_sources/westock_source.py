@@ -14,8 +14,6 @@ westock 字段（中文）→ chinaStock snake_case 的映射：
 """
 from __future__ import annotations
 
-import json
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -23,7 +21,6 @@ from typing import Any
 
 import pandas as pd
 
-from src.data_layer.normalize import normalize_lhb, normalize_limit_up
 from src.data_layer.symbols import to_chinastock, to_westock
 from src.data_sources.base import DataSource, SourceRole
 

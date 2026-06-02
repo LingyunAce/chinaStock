@@ -33,7 +33,7 @@ def sector_resonance_factor(
     返回：单行 DataFrame
     列：`date, symbol, sector_count, strong_count, value`
     """
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
     try:
         sectors = find_symbol_sectors(symbol, source=source)

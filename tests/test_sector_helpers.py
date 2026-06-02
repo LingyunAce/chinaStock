@@ -1,16 +1,9 @@
 """测试 src.integrations.sectors 的 find_symbol_sectors / detect_sector_resonance。"""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
-import pytest
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.integrations.sectors import detect_sector_resonance, find_symbol_sectors
 

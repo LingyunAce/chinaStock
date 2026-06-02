@@ -12,8 +12,7 @@
 from __future__ import annotations
 
 import warnings
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import timedelta
 
 import pandas as pd
 

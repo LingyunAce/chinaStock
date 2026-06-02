@@ -1,16 +1,10 @@
 """测试 src.factors 因子函数（mock 数据，无网络）。"""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.factors.lhb_flow import institutional_net_buy, lhb_signal_score
 from src.factors.limit_up_streak import limit_up_streak_distribution

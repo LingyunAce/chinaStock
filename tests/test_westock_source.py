@@ -1,22 +1,12 @@
 """测试 src.data_sources.westock_source 的 markdown 解析与字段映射。"""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pandas as pd
-import pytest
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+from unittest.mock import patch
 
 from src.data_sources.westock_source import (
     WestockSource,
     _parse_markdown_table,
     _to_number,
-    _westock_available,
 )
 
 
