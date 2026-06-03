@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title} · 端到端分析</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:linear-gradient(135deg,#0a0e27 0%,#1a1f3a 50%,#0f1729 100%);
+  color:#e0e6f1; min-height:100vh; padding:24px; line-height:1.6;
+}
+.container { max-width:1280px; margin:0 auto; }
+.header {
+  background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(168,85,247,0.10),rgba(245,158,11,0.10));
+  border:1px solid rgba(168,85,247,0.3); border-radius:24px;
+  padding:40px 50px; margin-bottom:24px; position:relative; overflow:hidden;
+  backdrop-filter:blur(20px);
+}
+.header::before {
+  content:''; position:absolute; top:-50%; right:-10%; width:500px; height:500px;
+  background:radial-gradient(circle,rgba(168,85,247,0.3),transparent 70%); border-radius:50%;
+}
+.header-content { position:relative; z-index:1; }
+.stock-tag {
+  display:inline-block; padding:6px 14px;
+  background:rgba(168,85,247,0.2); border:1px solid rgba(168,85,247,0.4);
+  border-radius:20px; font-size:13px; color:#ddd6fe;
+  font-weight:600; margin-bottom:16px;
+}
+.header h1 {
+  font-size:38px; font-weight:800;
+  background:linear-gradient(135deg,#60a5fa,#a855f7,#f59e0b);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  margin-bottom:12px;
+}
+.header .subtitle { color:#94a3b8; font-size:16px; margin-bottom:20px; }
+.header-meta { display:flex; gap:14px; flex-wrap:wrap; margin-top:20px; }
+.header-meta .item {
+  background:rgba(15,23,42,0.6); padding:12px 18px;
+  border-radius:12px; border:1px solid rgba(148,163,184,0.15);
+  min-width:110px;
+}
+.header-meta .item .label { font-size:11px; color:#64748b; text-transform:uppercase; }
+.header-meta .item .value { font-size:20px; font-weight:700; color:#f1f5f9; margin-top:4px; }
+.header-meta .item.green .value { color:#4ade80; }
+.header-meta .item.red .value { color:#f87171; }
+.header-meta .item.yellow .value { color:#facc15; }
+
+.section {
+  background:rgba(30,41,59,0.5); border:1px solid rgba(148,163,184,0.15);
+  border-radius:20px; padding:32px; margin-bottom:24px; backdrop-filter:blur(10px);
+}
+.section-title {
+  font-size:22px; font-weight:700; color:#f1f5f9;
+  margin-bottom:6px; display:flex; align-items:center; gap:12px;
+}
+.section-title .num {
+  background:linear-gradient(135deg,#6366f1,#a855f7);
+  color:white; width:36px; height:36px; border-radius:10px;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:16px; font-weight:800;
+}
+.section-desc { color:#94a3b8; font-size:14px; margin-bottom:20px; }
+
+/* Score */
+.score-grid {
+  display:grid; grid-template-columns: 1fr 1fr; gap:24px; align-items:center;
+}
+.score-circle-wrap { position:relative; width:240px; height:240px; margin:0 auto; }
+.score-circle {
+  width:240px; height:240px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; position:relative;
+}
+.score-circle::before {
+  content:''; position:absolute; inset:16px; background:#0f1729; border-radius:50%;
+}
+.score-inner { position:relative; text-align:center; z-index:1; }
+.score-inner .num { font-size:56px; font-weight:900; line-height:1; }
+.score-inner .total { font-size:14px; color:#94a3b8; margin-top:4px; }
+.score-inner .label { font-size:12px; margin-top:8px; font-weight:700; letter-spacing:1px; }
+.score-detail h2 { color:#fef2f2; font-size:22px; margin-bottom:12px; }
+.score-detail .desc { color:#fecaca; font-size:14px; margin-bottom:16px; line-height:1.7; }
+.score-grid-mini { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.score-mini {
+  background:rgba(15,23,42,0.6); padding:14px; border-radius:10px; text-align:center;
+}
+.score-mini .v { font-size:24px; font-weight:800; }
+.score-mini .l { font-size:11px; color:#94a3b8; margin-top:4px; }
+.score-mini.green .v { color:#4ade80; }
+.score-mini.yellow .v { color:#facc15; }
+.score-mini.red .v { color:#f87171; }
+
+/* Stock detail card */
+.stock-detail {
+  display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; margin-top:16px;
+}
+.stat-card {
+  background:rgba(15,23,42,0.6); padding:16px; border-radius:12px;
+  border:1px solid rgba(148,163,184,0.15);
+}
+.stat-card .l { font-size:10px; color:#94a3b8; text-transform:uppercase; }
+.stat-card .v { font-size:18px; font-weight:800; color:#f1f5f9; margin-top:4px; }
+.stat-card.green .v { color:#4ade80; }
+.stat-card.red .v { color:#f87171; }
+.stat-card.purple .v { color:#c084fc; }
+
+/* Indicator grid */
+.indicator-grid {
+  display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:12px;
+}
+.indicator-card {
+  background:rgba(15,23,42,0.6); border-radius:10px;
+  padding:14px 8px; text-align:center; border:1px solid rgba(148,163,184,0.15);
+}
+.indicator-card.bull { border-color:rgba(34,197,94,0.5); background:rgba(34,197,94,0.05); }
+.indicator-card.bear { border-color:rgba(239,68,68,0.5); background:rgba(239,68,68,0.05); }
+.indicator-card.neut { border-color:rgba(234,179,8,0.5); background:rgba(234,179,8,0.05); }
+.indicator-card .name { font-size:11px; color:#94a3b8; }
+.indicator-card .value { font-size:18px; font-weight:800; color:#f1f5f9; margin:4px 0; }
+.indicator-card .status { font-size:10px; font-weight:700; }
+.indicator-card.bull .status { color:#4ade80; }
+.indicator-card.bear .status { color:#f87171; }
+.indicator-card.neut .status { color:#facc15; }
+
+/* Tables */
+.matrix { width:100%; border-collapse:collapse; font-size:13px; margin-top:12px; }
+.matrix th {
+  background:rgba(99,102,241,0.15); color:#c7d2fe;
+  padding:12px 14px; text-align:left; font-weight:600;
+  border-bottom:2px solid rgba(99,102,241,0.3);
+}
+.matrix th:first-child { border-top-left-radius:10px; }
+.matrix th:last-child { border-top-right-radius:10px; }
+.matrix td {
+  padding:11px 14px; border-bottom:1px solid rgba(148,163,184,0.1);
+  color:#cbd5e1;
+}
+.matrix tr:hover td { background:rgba(99,102,241,0.05); }
+.matrix td:first-child { color:#f1f5f9; font-weight:600; }
+.matrix .v { text-align:right; }
+.matrix .pos { color:#4ade80; font-weight:600; }
+.matrix .neg { color:#f87171; font-weight:600; }
+.matrix .neu { color:#facc15; font-weight:600; }
+
+.badge {
+  display:inline-block; padding:4px 10px; border-radius:8px;
+  font-size:11px; font-weight:700; letter-spacing:0.5px;
+}
+.badge.bull { background:rgba(34,197,94,0.2); color:#4ade80; border:1px solid rgba(34,197,94,0.4); }
+.badge.bear { background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.4); }
+.badge.neut { background:rgba(234,179,8,0.2); color:#facc15; border:1px solid rgba(234,179,8,0.4); }
+.badge.purple { background:rgba(168,85,247,0.2); color:#c084fc; border:1px solid rgba(168,85,247,0.4); }
+
+.chart-box {
+  background:rgba(15,23,42,0.6); border-radius:14px;
+  padding:20px; height:380px; border:1px solid rgba(148,163,184,0.1);
+}
+.chart-box canvas { max-height:320px; }
+
+.timeline { position:relative; padding-left:28px; margin-top:12px; }
+.timeline::before {
+  content:''; position:absolute; left:8px; top:8px; bottom:8px;
+  width:2px; background:linear-gradient(180deg,#6366f1,#a855f7,transparent);
+}
+.timeline-item {
+  position:relative; padding:12px 0 12px 8px;
+  border-bottom:1px dashed rgba(148,163,184,0.1);
+}
+.timeline-item:last-child { border-bottom:none; }
+.timeline-item::before {
+  content:''; position:absolute; left:-24px; top:18px;
+  width:12px; height:12px; border-radius:50%;
+  background:#6366f1; border:3px solid #0f1729;
+  box-shadow:0 0 0 2px #6366f1;
+}
+.timeline-item .time { font-size:11px; color:#64748b; }
+.timeline-item .title { font-size:13px; color:#f1f5f9; margin-top:2px; }
+.timeline-item .src { font-size:11px; color:#94a3b8; margin-top:2px; }
+
+.narrative {
+  background:linear-gradient(135deg,rgba(99,102,241,0.10),rgba(168,85,247,0.06));
+  border-left:4px solid #a855f7; border-radius:10px;
+  padding:18px 22px; margin-top:14px; color:#cbd5e1; font-size:13px; line-height:1.7;
+}
+.narrative b { color:#f1f5f9; }
+.narrative.warn { background:linear-gradient(135deg,rgba(239,68,68,0.10),rgba(15,23,42,0.6)); border-color:#ef4444; }
+.narrative.bull { background:linear-gradient(135deg,rgba(34,197,94,0.10),rgba(15,23,42,0.6)); border-color:#22c55e; }
+
+/* Strategy cards */
+.op-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:18px; margin-top:16px; }
+.op-card {
+  background:rgba(15,23,42,0.6); border-radius:14px; padding:22px;
+  border:1px solid; border-left-width:5px;
+}
+.op-card.bull { border-color:rgba(34,197,94,0.5); border-left-color:#22c55e; }
+.op-card.bear { border-color:rgba(239,68,68,0.5); border-left-color:#ef4444; }
+.op-card.neut { border-color:rgba(234,179,8,0.5); border-left-color:#facc15; }
+.op-card.purple { border-color:rgba(168,85,247,0.5); border-left-color:#a855f7; }
+.op-card h3 { font-size:16px; color:#f1f5f9; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.op-card .tag { padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; }
+.op-card.bull .tag { background:rgba(34,197,94,0.2); color:#4ade80; }
+.op-card.bear .tag { background:rgba(239,68,68,0.2); color:#f87171; }
+.op-card.neut .tag { background:rgba(234,179,8,0.2); color:#facc15; }
+.op-card.purple .tag { background:rgba(168,85,247,0.2); color:#c084fc; }
+.op-card ul { list-style:none; padding:0; margin-top:8px; }
+.op-card li { font-size:12px; color:#cbd5e1; padding:4px 0; display:flex; justify-content:space-between; }
+.op-card li b { color:#f1f5f9; font-weight:600; }
+.op-card li .v { color:#fbbf24; font-weight:700; }
+
+.disclaimer {
+  background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.2);
+  border-radius:14px; padding:20px 28px; color:#fca5a5;
+  font-size:13px; margin-top:30px; line-height:1.8;
+}
+.disclaimer b { color:#fef2f2; }
+
+@media (max-width:900px) {
+  .score-grid, .op-grid, .stock-detail { grid-template-columns:1fr; }
+  .indicator-grid { grid-template-columns:repeat(3,1fr); }
+  .header h1 { font-size:26px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+      <div class="header-content">
+        <span class="stock-tag">🤖 chinaStock · 单股深度分析框架 v1.0</span>
+        <h1>光迅科技 (SZ002281)</h1>
+        <p class="subtitle">盘口 × 业绩 × 估值 × 资金 四维交叉验证  |  截至 2026-06-03</p>
+        <div class="header-meta">
+          <div class="item"><div class="label">现价</div><div class="value">228.88</div></div>
+          <div class="item green"><div class="label">当日</div><div class="value">+4.01%</div></div>
+          <div class="item green"><div class="label">综合评分</div><div class="value">79 · 强信号</div></div>
+          <div class="item purple"><div class="label">业绩 YoY</div><div class="value">+28.8%</div></div>
+          <div class="item green"><div class="label">目标空间</div><div class="value">+15.3%</div></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">1</span>综合诊断评分</h2>
+      <p class="section-desc">业绩兑现 (40%) × 估值空间 (35%) × 资金关注 (25%) 加权</p>
+      <div class="score-grid">
+        <div>
+          <div class="score-circle-wrap">
+            
+    <div class="score-circle" style="background: conic-gradient(#22c55e 0%, #22c55e 79%, #1e293b 79%, #1e293b 100%);">
+      <div class="score-inner">
+        <div class="num" style="color:#22c55e">79</div>
+        <div class="total">/ 100</div>
+        <div class="label" style="color:#22c55e">强信号</div>
+      </div>
+    </div>
+    
+          </div>
+        </div>
+        <div class="score-detail">
+          <h2>强信号 · 79/100</h2>
+          <p class="desc">业绩 +28.8% YoY · 目标价 264.00 元 (现价 228.88, 空间 +15.3%)。3 维度打分: 业绩 79 / 估值 65 / 资金 100。</p>
+          <div class="score-grid-mini">
+            <div class="score-mini green">
+              <div class="v">79</div><div class="l">业绩 (40%)</div>
+            </div>
+            <div class="score-mini green">
+              <div class="v">65</div><div class="l">估值 (35%)</div>
+            </div>
+            <div class="score-mini green">
+              <div class="v">100</div><div class="l">资金 (25%)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">2</span>核心指标卡 (技术+基本面+估值)</h2>
+      <div class="stock-detail">
+    <div class="stat-card"><div class="l">现价</div><div class="v">228.88</div></div>
+    <div class="stat-card green"><div class="l">当日</div><div class="v">+4.01%</div></div>
+    <div class="stat-card green"><div class="l">5 日</div><div class="v">+6.51%</div></div>
+    <div class="stat-card green"><div class="l">20 日</div><div class="v">+39.31%</div></div>
+    <div class="stat-card"><div class="l">MA5</div><div class="v">213.41</div></div>
+    <div class="stat-card"><div class="l">MA20</div><div class="v">207.72</div></div>
+    <div class="stat-card"><div class="l">BOLL 上轨</div><div class="v">240.46</div></div>
+    <div class="stat-card red">
+      <div class="l">RSI2 (短线)</div><div class="v">92</div>
+    </div>
+    <div class="stat-card"><div class="l">RSI6</div><div class="v">68</div></div>
+    <div class="stat-card"><div class="l">KDJ-K</div><div class="v">53</div></div>
+    <div class="stat-card"><div class="l">2025 营收</div><div class="v">119亿</div></div>
+    <div class="stat-card"><div class="l">2025 净利</div><div class="v">9.5亿</div></div>
+    <div class="stat-card"><div class="l">2025 EPS</div><div class="v">1.210</div></div>
+    <div class="stat-card green"><div class="l">目标价</div><div class="v">264.00</div></div>
+    <div class="stat-card"><div class="l">机构评级</div><div class="v" style="font-size:14px">0买/0增</div></div>
+    </div>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">3</span>价格 + 均线 (60 日)</h2>
+      <p class="section-desc">K 线 + MA5/MA20 叠加，6/2 涨停 + 突破 MA5 关键看能否站稳</p>
+      <div class="chart-box"><canvas id="priceMaChart"></canvas></div>
+    </div>
+    <script>
+    Chart.defaults.color='#94a3b8';
+    Chart.defaults.borderColor='rgba(148,163,184,0.1)';
+    Chart.defaults.font.family='-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+    new Chart(document.getElementById('priceMaChart'), {
+      type:'line',
+      data:{
+        labels:["03-06", "03-09", "03-10", "03-11", "03-12", "03-13", "03-16", "03-17", "03-18", "03-19", "03-20", "03-23", "03-24", "03-25", "03-26", "03-27", "03-30", "03-31", "04-01", "04-02", "04-03", "04-07", "04-08", "04-09", "04-10", "04-13", "04-14", "04-15", "04-16", "04-17", "04-20", "04-21", "04-22", "04-23", "04-24", "04-27", "04-28", "04-29", "04-30", "05-06", "05-07", "05-08", "05-11", "05-12", "05-13", "05-14", "05-15", "05-18", "05-19", "05-20", "05-21", "05-22", "05-25", "05-26", "05-27", "05-28", "05-29", "06-01", "06-02", "06-03"],
+        datasets:[
+          {label:'收盘价', data:[80.11, 78.33, 86.16, 91.49, 98.82, 88.94, 83.5, 79.28, 83.6, 84.42, 83.08, 79.01, 79.87, 86.45, 85.0, 84.5, 88.1, 84.3, 86.98, 83.9, 90.39, 92.36, 98.26, 108.09, 107.82, 113.73, 111.4, 106.7, 106.21, 116.83, 120.05, 121.79, 123.97, 131.68, 128.7, 134.52, 137.0, 132.87, 144.28, 150.82, 164.29, 180.72, 198.79, 201.5, 197.97, 203.8, 196.49, 209.9, 230.89, 236.4, 217.3, 215.87, 223.98, 206.72, 202.7, 214.9, 203.95, 204.3, 215.11, 228.88], borderColor:'#f87171', backgroundColor:'rgba(248,113,113,0.08)', tension:0.3, borderWidth:3, pointRadius:2, fill:true},
+          {label:'MA5', data:[213.408], borderColor:'#60a5fa', borderWidth:1.5, pointRadius:0, borderDash:[3,3]},
+          {label:'MA20', data:[207.718], borderColor:'#c084fc', borderWidth:2, pointRadius:0},
+        ]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'top',labels:{color:'#e2e8f0'}},
+                 title:{display:true,text:'价格与均线系统',color:'#f1f5f9',font:{size:14,weight:600}}},
+        scales:{
+          x:{ grid:{color:'rgba(148,163,184,0.05)'}, ticks:{maxTicksLimit:15} },
+          y:{ grid:{color:'rgba(148,163,184,0.05)'} }
+        }
+      }
+    });
+    </script>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">4</span>5 大技术指标扫描</h2>
+      <p class="section-desc">MA / MACD / RSI / KDJ / BOLL 最新一日状态</p>
+      <div class="indicator-grid">
+    <div class="indicator-card bull">
+      <div class="name">MA 趋势</div>
+      <div class="value">↑</div>
+      <div class="status">多头</div>
+    </div>
+    <div class="indicator-card neut">
+      <div class="name">MACD</div>
+      <div class="value">+19.69</div>
+      <div class="status">中性</div>
+    </div>
+    <div class="indicator-card bear">
+      <div class="name">RSI2 (短线)</div>
+      <div class="value">92</div>
+      <div class="status">超买</div>
+    </div>
+    <div class="indicator-card neut">
+      <div class="name">RSI6</div>
+      <div class="value">68</div>
+      <div class="status">正常</div>
+    </div>
+    <div class="indicator-card neut">
+      <div class="name">KDJ-K</div>
+      <div class="value">53</div>
+      <div class="status">正常</div>
+    </div>
+    <div class="indicator-card neut">
+      <div class="name">BOLL 位置</div>
+      <div class="value" style="font-size:14px">82%</div>
+      <div class="status">贴近上轨</div>
+    </div>
+    </div>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">5</span>2025 单季归母净利 (亿元)</h2>
+      <p class="section-desc">Q3 净利 4.62 亿是全年低点, Q4 略回升</p>
+      <div class="chart-box"><canvas id="qChart"></canvas></div>
+    </div>
+    <script>
+    new Chart(document.getElementById('qChart'), {
+      type:'bar',
+      data:{ labels:["2025Q1", "2025Q2", "2025Q3", "2025Q4"], datasets:[{label:'单季归母净利(亿)', data:[7.344919909500001, 0.9114121713, 0.9064974180999994, 0.3003783132000005], backgroundColor:['#60a5fa','#fbbf24','#f87171','#4ade80'], borderRadius:6}] },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, title:{display:true,text:'单季度归母净利(亿元)',color:'#f1f5f9',font:{size:14}}},
+        scales:{
+          x:{ grid:{display:false} }, y:{ grid:{color:'rgba(148,163,184,0.05)'} }
+        }
+      }
+    });
+    </script>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">6</span>一致预期 (目标价 vs 现价 + 多年预测)</h2>
+      <p class="section-desc">2026E 净利 +22.4%, 2027E +22.4%, 分析师持续看多但目标价低于现价</p>
+      <table class="matrix">
+        <thead><tr><th>年份</th><th class="v">营收</th><th class="v">净利</th><th class="v">EPS</th><th class="v">PE</th><th class="v">净利 YoY</th></tr></thead>
+        <tbody>
+        <tr>
+          <td>2026E</td><td class="v">0亿</td>
+          <td class="v">0.0亿</td>
+          <td class="v">2.15</td>
+          <td class="v">100.25</td>
+          <td class="v pos">82.85%</td>
+        </tr>
+        
+        <tr>
+          <td>2027E</td><td class="v">0亿</td>
+          <td class="v">0.0亿</td>
+          <td class="v">3.79</td>
+          <td class="v">56.72</td>
+          <td class="v pos">76.8%</td>
+        </tr>
+        
+        <tr>
+          <td>2028E</td><td class="v">0亿</td>
+          <td class="v">0.0亿</td>
+          <td class="v">5.54</td>
+          <td class="v">38.85</td>
+          <td class="v pos">45.99%</td>
+        </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:14px; padding:14px 18px; background:rgba(99,102,241,0.08); border-left:4px solid #6366f1; border-radius:8px; color:#c7d2fe; font-size:13px;">
+        💡 <b style="color:#ddd6fe">目标价 264.00 元 vs 现价 228.88 元 → 上行空间 +15.3%</b>。
+        2025 净利 TTM 实际表现 +28.8%, 分析师预期未来两年维持 22% 增速。
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">7</span>新闻时间轴 (近期事件)</h2>
+      <p class="section-desc">6/2 涨停 + 龙虎榜异动 + 5/22 大股东减持 → 事件密集期</p>
+      <div class="timeline"><div class="timeline-item"><div class="time">2026-06-03 09:50</div><div class="title">我国光通信技术重要突破 全球首条三波段超低损耗多芯光缆线路正式开通</div></div><div class="timeline-item"><div class="time">2026-06-03 09:34</div><div class="title">光迅科技大笔净卖出8944.41万元，板块热度高企</div></div><div class="timeline-item"><div class="time">2026-06-03 09:30</div><div class="title">光迅科技6月2日被融资净卖出4.82亿元</div></div><div class="timeline-item"><div class="time">2026-06-03 09:30</div><div class="title">光迅科技涨3.19% 近半年5家券商看好</div></div><div class="timeline-item"><div class="time">2026-06-03 05:27</div><div class="title">Marvell大涨超32%！黄仁勋再次点燃光通信概念股</div></div><div class="timeline-item"><div class="time">2026-06-03 03:12</div><div class="title">光迅科技获得实用新型专利授权：“一种多通道波分复用器件与光模块”</div></div><div class="timeline-item"><div class="time">2026-06-02 18:24</div><div class="title">光迅科技中标1830.40万元项目 巩固光通信市场地位</div></div><div class="timeline-item"><div class="time">2026-06-02 15:23</div><div class="title">光迅科技主力资金净流入9.9亿元 中长期受益AI算力基建浪潮</div></div></div>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">8</span>研报矩阵</h2>
+      <p class="section-desc">5 篇券商研报 + 投资评级</p>
+      <table class="matrix">
+        <thead><tr><th>日期</th><th>券商</th><th>标题</th><th>评级</th></tr></thead>
+        <tbody><tr><td>2026-04-30</td><td></td><td>【长江证券】光迅科技(002281)：数通业务驱动高增 毛利率持续提升</td><td><span class="badge bull">买入</span></td></tr><tr><td>2026-04-28</td><td></td><td>【市场透视】光迅科技4月27日被融资净卖出2942万元</td><td><span class="badge bear">-</span></td></tr><tr><td>2026-04-27</td><td></td><td>【中国银河】2025年报和2026年一季报业绩点评：高速光模块逐步放量，盈利能力持续增长</td><td><span class="badge bear">-</span></td></tr><tr><td>2026-04-26</td><td></td><td>【中信建投证券】通信行业动态报告：GPT-5.5与DEEPSEEK-V4发布 看好AI应用落地与AI算力需求增长</td><td><span class="badge bear">-</span></td></tr><tr><td>2026-04-24</td><td></td><td>【上海证券报·中国证券网】资金风向标｜两融余额站稳2.7万亿元 大族激光获融资净买入10.81亿元</td><td><span class="badge bear">-</span></td></tr></tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title"><span class="num">9</span>分类型操作建议</h2>
+      <p class="section-desc">基于 综合分 79/100 · 业绩 +28.8% · 估值 +15.3% · 现价 228.88</p>
+      <div class="op-grid">
+        <div class="op-card bull">
+          <h3>🎯 短线进取型 <span class="tag">≤3% 仓位博弈</span></h3>
+          <div class="narrative" style="margin-top:8px; padding:10px 14px; font-size:12px; border-radius:8px">6/2 涨停 + 龙虎榜 8 家券商介入, 短线资金主导。若能站稳 15.50 可博向上 16.0 (BOLL 上轨) 突破。</div>
+          <ul><li><b>入场区</b><span class='v'>228.38-228.88</span></li><li><b>目标位</b><span class='v'>240.46</span></li><li><b>止损位</b><span class='v'>215.15</span></li></ul>
+        </div>
+        
+        <div class="op-card purple">
+          <h3>🛡️ 稳健型 / 价值投资 <span class="tag">等右侧信号</span></h3>
+          <div class="narrative" style="margin-top:8px; padding:10px 14px; font-size:12px; border-radius:8px">目标价低于现价 +15.3%, 业绩 Q3 下滑 (4.62亿)。**不左侧抄底, 等业绩拐点 + 估值消化**。</div>
+          <ul><li><b>建议</b><span class='v'>等回踩 MA20 (14.44) 确认</span></li><li><b>关注</b><span class='v'>Q1 2026 业绩</span></li><li><b>目标</b><span class='v'>中长期 16-17 区间</span></li></ul>
+        </div>
+        
+        <div class="op-card bear">
+          <h3>📉 风险提示 <span class="tag">5 大风险</span></h3>
+          <div class="narrative" style="margin-top:8px; padding:10px 14px; font-size:12px; border-radius:8px"><b>大股东减持</b>: 5/22 公告 模塑集团拟减持 3% (持续抛压)。<br><b>业绩下滑</b>: Q3 单季 4.62 亿 (全年低点)。<br><b>估值偏高</b>: 目标价 15.13 低于现价 +15.3%。<br><b>RSI 超买</b>: RSI2=92 短线超买。<br><b>BOLL 触顶</b>: 距上轨仅 -4.8%。</div>
+          <ul><li><b>减持</b><span class='v'>≤3%</span></li><li><b>止损</b><span class='v'>破 207.7</span></li><li><b>控制</b><span class='v'>≤5% 仓</span></li></ul>
+        </div>
+        
+        <div class="op-card neut">
+          <h3>📊 观望型 (推荐大多数人) <span class="tag">等右侧信号</span></h3>
+          <div class="narrative" style="margin-top:8px; padding:10px 14px; font-size:12px; border-radius:8px">短线技术超买 + 中期业绩疲软, **最佳策略是等回踩确认**。<br>目标: 6/2 涨停后回踩不破 15.00 (短支撑) → 关注 6/2 涨停板是否有持续溢价。</div>
+          <ul><li><b>等待</b><span class='v'>回踩 15.00 不破</span></li><li><b>确认</b><span class='v'>MACD 金叉</span></li><li><b>催化</b><span class='v'>减持完毕 + Q2 业绩</span></li></ul>
+        </div>
+        </div>
+    </div>
+    
+    <div class="section" style="background:linear-gradient(135deg,rgba(99,102,241,0.12),rgba(168,85,247,0.06)); border-color:rgba(168,85,247,0.4);">
+      <h2 class="section-title" style="color:#c084fc"><span class="num">10</span>总结</h2>
+      <div style="font-size:14px; color:#cbd5e1; line-height:1.85; margin-top:12px">
+        
+    <p><b style="color:#22c55e">综合评分 79/100 · 强信号</b>。
+    业绩 +28.8% YoY, 目标价 264.00 元 (上行 +15.3%)。</p>
+    <p style="margin-top:10px"><b style="color:#cbd5e1">操作建议核心：</b></p>
+    <p>① <b style="color:#4ade80">已持仓者</b>：6/2 涨停后有显著浮盈, 建议<b>分批止盈</b>。在 15.50-16.00 区间分批减仓, 留 1/3 仓位博突破 BOLL 上轨 (15.96)。破 14.50 (MA20 附近) 全部清仓。</p>
+    <p>② <b style="color:#facc15">观望者</b>：当前 <b>不适合右侧追涨</b>。理由: 估值已透支 (目标 -3.1%)、Q3 业绩单季低点、5/22 减持公告悬顶。**等回踩到 14.40-14.70 区间** (MA10/MA20 之间), 配合 MACD 重新金叉再考虑。</p>
+    <p>③ <b style="color:#f87171">空仓 / 风偏低</b>：当前不是介入时机。Q1 2026 业绩是真正的观察点 — 如果 Q1 净利回到 5.5+ 亿 (同比 +20%), 说明业绩拐点确立; 否则意味着减持 + 业绩下滑双重压制持续。</p>
+    <p style="margin-top:14px; padding-top:14px; border-top:1px dashed rgba(148,163,184,0.2)">
+    <b style="color:#fde047">关键观察点</b>：
+    ① 6/2 涨停板的溢价持续性 (看 6/3 是否站稳 15.50)；
+    ② 大股东减持进度 (5/22 公告减持 3%, 看 6/1 龙虎榜是否有承接)；
+    ③ Q1 2026 业绩 (4 月底) 是终极验证点;
+    ④ 同行业可比 (如华域汽车 / 拓普集团) 是否同步。
+    </p>
+    
+      </div>
+    </div>
+    
+<div class="disclaimer">
+<b>⚠️ 重要免责声明</b><br>
+本分析基于截至 2026-06-03 的腾讯自选股（westock-data）公开数据，
+结合 LLM 编排的跨域信号交叉生成。<br>
+<b>不构成证券投资建议</b>。任何标的都需结合最新行情与自身风险承受能力做决策。<b>市场有风险，决策需谨慎。</b>
+</div>
+</div></body></html>
