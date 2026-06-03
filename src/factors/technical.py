@@ -234,6 +234,57 @@ def compute_vote_signal(df: pd.DataFrame, min_votes: int = 2) -> pd.DataFrame:
     return all_sig[["date", "signal", "vote_count", "close"]]
 
 
+def compute_macd_with_ma_filter(
+    df: pd.DataFrame,
+    fast: int = 12,
+    slow: int = 26,
+    signal_period: int = 9,
+) -> pd.DataFrame:
+    """MACD 金叉 + MA20 方向过滤。
+
+    规则：
+    - 金叉信号只在 MA20 向上（当日 MA20 > 前日 MA20）时才触发 +1
+    - 死叉信号只在 MA20 向下时才触发 -1
+    - MA20 平坦时信号 = 0（过滤震荡市假信号）
+    """
+    df = _ensure_columns(df)
+    df = df.sort_values("date").reset_index(drop=True)
+    # MACD
+    df["ema_fast"] = df["close"].ewm(span=fast, adjust=False).mean()
+    df["ema_slow"] = df["close"].ewm(span=slow, adjust=False).mean()
+    df["dif"] = df["ema_fast"] - df["ema_slow"]
+    df["dea"] = df["dif"].ewm(span=signal_period, adjust=False).mean()
+    # MA20
+    df["ma20"] = df["close"].rolling(20).mean()
+    df["ma20_up"] = df["ma20"] > df["ma20"].shift(1)
+    df["signal"] = 0
+    prev_dif = df["dif"].shift(1)
+    prev_dea = df["dea"].shift(1)
+    # 金叉 + MA20 向上
+    cross_up = (prev_dif <= prev_dea) & (df["dif"] > df["dea"]) & df["ma20_up"]
+    # 死叉 + MA20 向下
+    cross_down = (prev_dif >= prev_dea) & (df["dif"] < df["dea"]) & ~df["ma20_up"]
+    df.loc[cross_up, "signal"] = 1
+    df.loc[cross_down, "signal"] = -1
+    return df[["date", "signal", "dif", "dea", "ma20", "close"]].dropna()
+
+
+def compute_fundamental_filtered_macd(
+    macd_signals: pd.DataFrame,
+    has_positive_earnings: bool,
+) -> pd.DataFrame:
+    """基本面过滤：只在 2025 净利 YoY > 0 时保留 MACD 信号。
+
+    :param macd_signals: compute_macd() 的返回值
+    :param has_positive_earnings: True 时保留全部信号，False 时全部清零（不交易）
+    """
+    if has_positive_earnings:
+        return macd_signals
+    out = macd_signals.copy()
+    out["signal"] = 0
+    return out
+
+
 __all__ = [
     "compute_ma",
     "compute_macd",
@@ -242,4 +293,6 @@ __all__ = [
     "compute_boll",
     "compute_all_signals",
     "compute_vote_signal",
+    "compute_macd_with_ma_filter",
+    "compute_fundamental_filtered_macd",
 ]
