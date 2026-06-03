@@ -657,7 +657,7 @@ def render_kline_chart(d):
     return f"""
     <div class="section">
       <h2 class="section-title"><span class="num">3</span>价格 + 均线 (60 日)</h2>
-      <p class="section-desc">K 线 + MA5/MA20 叠加，6/2 涨停 + 突破 MA5 关键看能否站稳</p>
+      <p class="section-desc">K 线 + MA5/MA20 叠加，关键看能否站稳均线支撑</p>
       <div class="chart-box"><canvas id="priceMaChart"></canvas></div>
     </div>
     <script>
@@ -990,7 +990,7 @@ def render_news(d):
     return f"""
     <div class="section">
       <h2 class="section-title"><span class="num">7</span>新闻时间轴 (近期事件)</h2>
-      <p class="section-desc">6/2 涨停 + 龙虎榜异动 + 5/22 大股东减持 → 事件密集期</p>
+      <p class="section-desc">近期新闻/公告/催化事件追踪</p>
       <div class="timeline">{"".join(items) if items else '<div style="color:#64748b">(无新闻)</div>'}</div>
     </div>
     """
@@ -1094,21 +1094,85 @@ def build_html(d: dict) -> str:
         f"4 维度打分: 业绩 {score['perf']} / 估值 {score['valuation']} / 板块 {score['sector']:.0f} / 资金 {score['capital']:.0f}。"
     )
 
-    # 4 风格策略
+    # 4 风格策略 — 全部从实际数据动态生成，不硬编码任何票
     cur = score["cur"]
     ma20 = _f(d.get("technical_ma", {}).get("head", [{}])[0].get("ma.MA_20"))
+    ma10 = _f(d.get("technical_ma", {}).get("head", [{}])[0].get("ma.MA_10"))
     boll_up = _f(
         d.get("technical_boll", {}).get("head", [{}])[0].get("boll.BOLL_UPPER")
     )
+    rsi2 = _f(d.get("technical_rsi", {}).get("head", [{}])[0].get("rsi.RSI_2"))
+    fs = d.get("finance_summary", {}).get("head", [])
+    single_q = []
+    if len(fs) >= 4:
+        cumul = [_f(r.get("NPParentCompanyOwnersTTM")) for r in fs[:4]]
+        single_q = [cumul[0]] + [cumul[i] - cumul[i - 1] for i in range(1, 4)]
+    q_min_idx = single_q.index(min(single_q)) if single_q else 0
+    q_min_val = min(single_q) / 1e8 if single_q else 0
+    q_min_label = f"Q{q_min_idx + 1}"
+
+    # 从新闻里提取事件线索
+    news = d.get("news", {}).get("head", [])
+    has_reduce = any("减持" in str(n.get("title", "")) for n in news)
+
+    has_catalyst = any(
+        "涨停" in str(n.get("title", "")) or "大涨" in str(n.get("title", ""))
+        for n in news
+    )
+
+    # 风险点动态生成
+    risk_items = []
+    if score["upside"] < -5:
+        risk_items.append(
+            f"估值偏高: 目标价 {score['tp'] or 0:.2f} 低于现价 {score['upside']:+.1f}%"
+        )
+    if rsi2 > 80:
+        risk_items.append(f"RSI 超买: RSI2={rsi2:.0f} 短线过热")
+    if cur > boll_up * 0.95 and boll_up > 0:
+        risk_items.append(f"BOLL 触顶: 距上轨仅 {(cur / boll_up - 1) * 100:.1f}%")
+    if has_reduce:
+        risk_items.append("近期有减持公告（详见新闻）")
+    if score["ni_yoy"] < 0:
+        risk_items.append(f"业绩下滑: 净利 YoY {score['ni_yoy']:+.1f}%")
+    if q_min_val > 0 and len(single_q) >= 4:
+        risk_items.append(
+            f"单季低点: {q_min_label} 净利 {q_min_val:.1f} 亿（全年最低季度）"
+        )
+    if score["capital"] < 40:
+        risk_items.append("资金关注低: 无龙虎榜/涨停异动")
+    risk_html = (
+        "<br>".join(f"• {html.escape(r)}" for r in risk_items)
+        if risk_items
+        else "• 当前无明显技术/基本面风险"
+    )
+
+    # 短线进取叙事
+    bull_narr = f"{'涨停+龙虎榜' if has_catalyst else '技术趋势'}驱动短线机会。"
+    if boll_up > cur:
+        bull_narr += f" 若站稳 {cur:.2f} 可博向上 {boll_up:.2f}（BOLL 上轨）。"
+
+    # 稳健型叙事
+    purple_narr = f"目标价 {score['tp'] or 0:.2f} vs 现价 {cur:.2f}（空间 {score['upside']:+.1f}%）。"
+    if score["upside"] < 0:
+        purple_narr += " 估值已透支，不左侧抄底，等业绩拐点。"
+    else:
+        purple_narr += " 估值合理，可分批建仓。"
+
+    # 观望型叙事
+    neut_narr = f"综合评分 {score['total']}/100。"
+    if rsi2 > 70 or score["upside"] < -5:
+        neut_narr += " 短线超买/估值透支，等回踩确认。"
+    else:
+        neut_narr += " 关注 MA20 支撑确认后介入。"
 
     narrative_strategies = [
         (
             "bull",
             "🎯 短线进取型",
             "≤3% 仓位博弈",
-            "6/2 涨停 + 龙虎榜 8 家券商介入, 短线资金主导。若能站稳 15.50 可博向上 16.0 (BOLL 上轨) 突破。",
+            bull_narr,
             {
-                "入场区": f"{cur - 0.5:.2f}-{cur:.2f}",
+                "入场区": f"{cur * 0.97:.2f}-{cur:.2f}",
                 "目标位": f"{boll_up:.2f}",
                 "止损位": f"{cur * 0.94:.2f}",
             },
@@ -1117,53 +1181,68 @@ def build_html(d: dict) -> str:
             "purple",
             "🛡️ 稳健型 / 价值投资",
             "等右侧信号",
-            f"目标价低于现价 {score['upside']:+.1f}%, 业绩 Q3 下滑 (4.62亿)。**不左侧抄底, 等业绩拐点 + 估值消化**。",
+            purple_narr,
             {
-                "建议": "等回踩 MA20 (14.44) 确认",
-                "关注": "Q1 2026 业绩",
-                "目标": "中长期 16-17 区间",
+                "建议": f"等回踩 MA20 ({ma20:.1f}) 确认",
+                "关注": "最新季度业绩",
+                "目标": f"中期 {cur * 1.05:.0f}-{cur * 1.15:.0f}",
             },
         ),
         (
             "bear",
             "📉 风险提示",
-            "5 大风险",
-            f"<b>大股东减持</b>: 5/22 公告 模塑集团拟减持 3% (持续抛压)。<br>"
-            f"<b>业绩下滑</b>: Q3 单季 4.62 亿 (全年低点)。<br>"
-            f"<b>估值偏高</b>: 目标价 15.13 低于现价 {score['upside']:+.1f}%。<br>"
-            f"<b>RSI 超买</b>: RSI2={_f(d.get('technical_rsi', {}).get('head', [{}])[0].get('rsi.RSI_2')):.0f} 短线超买。<br>"
-            f"<b>BOLL 触顶</b>: 距上轨仅 {(cur / boll_up - 1) * 100:.1f}%。",
-            {"减持": "≤3%", "止损": f"破 {ma20:.1f}", "控制": "≤5% 仓"},
+            f"{len(risk_items)} 项风险",
+            risk_html,
+            {
+                "止损": f"破 MA20 ({ma20:.1f})" if ma20 > 0 else "见技术分析",
+                "控制": "≤5% 仓位",
+                "分散": "不重仓单票",
+            },
         ),
         (
             "neut",
-            "📊 观望型 (推荐大多数人)",
+            "📊 观望型（推荐大多数人）",
             "等右侧信号",
-            "短线技术超买 + 中期业绩疲软, **最佳策略是等回踩确认**。<br>"
-            "目标: 6/2 涨停后回踩不破 15.00 (短支撑) → 关注 6/2 涨停板是否有持续溢价。",
+            neut_narr,
             {
-                "等待": "回踩 15.00 不破",
+                "等待": f"回踩 MA10 ({ma10:.1f}) 不破" if ma10 > 0 else "等回踩确认",
                 "确认": "MACD 金叉",
-                "催化": "减持完毕 + Q2 业绩",
+                "催化": "最新业绩/行业消息",
             },
         ),
     ]
 
-    conclusions = f"""
-    <p><b style="color:{sentiment_color}">综合评分 {score["total"]}/100 · {sentiment_label}</b>。
-    业绩 {score["ni_yoy"]:+.1f}% YoY, 目标价 {score["tp"] or 0:.2f} 元 (上行 {score["upside"]:+.1f}%)。</p>
-    <p style="margin-top:10px"><b style="color:#cbd5e1">操作建议核心：</b></p>
-    <p>① <b style="color:#4ade80">已持仓者</b>：6/2 涨停后有显著浮盈, 建议<b>分批止盈</b>。在 15.50-16.00 区间分批减仓, 留 1/3 仓位博突破 BOLL 上轨 (15.96)。破 14.50 (MA20 附近) 全部清仓。</p>
-    <p>② <b style="color:#facc15">观望者</b>：当前 <b>不适合右侧追涨</b>。理由: 估值已透支 (目标 -3.1%)、Q3 业绩单季低点、5/22 减持公告悬顶。**等回踩到 14.40-14.70 区间** (MA10/MA20 之间), 配合 MACD 重新金叉再考虑。</p>
-    <p>③ <b style="color:#f87171">空仓 / 风偏低</b>：当前不是介入时机。Q1 2026 业绩是真正的观察点 — 如果 Q1 净利回到 5.5+ 亿 (同比 +20%), 说明业绩拐点确立; 否则意味着减持 + 业绩下滑双重压制持续。</p>
-    <p style="margin-top:14px; padding-top:14px; border-top:1px dashed rgba(148,163,184,0.2)">
-    <b style="color:#fde047">关键观察点</b>：
-    ① 6/2 涨停板的溢价持续性 (看 6/3 是否站稳 15.50)；
-    ② 大股东减持进度 (5/22 公告减持 3%, 看 6/1 龙虎榜是否有承接)；
-    ③ Q1 2026 业绩 (4 月底) 是终极验证点;
-    ④ 同行业可比 (如华域汽车 / 拓普集团) 是否同步。
-    </p>
-    """
+    # 总结段 — 全部动态
+    conclusions_parts = [
+        f'<p><b style="color:{sentiment_color}">综合评分 {score["total"]}/100 · {sentiment_label}</b>。',
+        f"业绩 {score['ni_yoy']:+.1f}% YoY，目标价 {score['tp'] or 0:.2f} 元（空间 {score['upside']:+.1f}%）。</p>",
+    ]
+    if has_catalyst:
+        conclusions_parts.append(
+            '<p style="margin-top:8px; color:#4ade80">✅ 近期有正面催化事件（详见新闻）</p>'
+        )
+    if has_reduce:
+        conclusions_parts.append(
+            '<p style="margin-top:8px; color:#f87171">⚠️ 近期有减持公告（详见新闻）</p>'
+        )
+    conclusions_parts.append(
+        '<p style="margin-top:10px"><b style="color:#cbd5e1">操作建议核心：</b></p>'
+    )
+    if score["upside"] > 0 and rsi2 < 70:
+        conclusions_parts.append(
+            f'<p>① <b style="color:#4ade80">可建仓</b>: 估值有空间（{score["upside"]:+.1f}%），RSI 未超买。'
+            f"建议回踩 MA10（{ma10:.1f}）/ MA20（{ma20:.1f}）分批建仓。</p>"
+        )
+    else:
+        conclusions_parts.append(
+            f'<p>① <b style="color:#facc15">不追高</b>: 估值透支（{score["upside"]:+.1f}%）或 RSI 超买'
+            f"（RSI2={rsi2:.0f}），等回踩 MA20（{ma20:.1f}）再考虑。</p>"
+        )
+    conclusions_parts.append(
+        f'<p>② <b style="color:#f1f5f9">已持仓者</b>: BOLL 上轨 {boll_up:.1f} 附近可分批止盈，'
+        f"破 MA20（{ma20:.1f}）全部清仓。</p>"
+    )
+    conclusions = "\n".join(conclusions_parts)
 
     parts = [
         HTML_HEAD.replace("__TITLE__", f"{html.escape(name)} ({html.escape(symbol)})")
