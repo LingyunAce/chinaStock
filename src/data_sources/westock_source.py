@@ -369,7 +369,9 @@ class WestockSource(DataSource):
         if date:
             args.extend(["--date", date.replace("-", "")])
         if start and end:
-            args.extend(["--start", start.replace("-", ""), "--end", end.replace("-", "")])
+            args.extend(
+                ["--start", start.replace("-", ""), "--end", end.replace("-", "")]
+            )
         text = _call_westock(args)
         raw = _parse_markdown_table(text)
         if raw.empty:
@@ -387,7 +389,9 @@ class WestockSource(DataSource):
         return raw
 
     # ---------------------- 新闻 / 公告 / 研报 ----------------------
-    def get_news(self, symbol: str, limit: int = 10, news_type: int = 0) -> pd.DataFrame:
+    def get_news(
+        self, symbol: str, limit: int = 10, news_type: int = 0
+    ) -> pd.DataFrame:
         """个股新闻。
 
         :param news_type: 0=全部 1=... 详见 westock help
@@ -400,7 +404,11 @@ class WestockSource(DataSource):
         if raw.empty:
             return raw
         # 只保留关键列
-        keep = [c for c in ("time", "title", "src", "summary", "url", "importance") if c in raw.columns]
+        keep = [
+            c
+            for c in ("time", "title", "src", "summary", "url", "importance")
+            if c in raw.columns
+        ]
         out = raw[keep].copy() if keep else raw
         if "time" in out.columns:
             out["time"] = out["time"].astype(str).str.strip()
@@ -435,7 +443,11 @@ class WestockSource(DataSource):
         if raw.empty:
             return raw
         # 关键列：time / title / src（券商）/ tzpj（投资评级：买入/增持/...）
-        keep = [c for c in ("time", "title", "src", "typeStr", "tzpj", "summary") if c in raw.columns]
+        keep = [
+            c
+            for c in ("time", "title", "src", "typeStr", "tzpj", "summary")
+            if c in raw.columns
+        ]
         out = raw[keep].copy() if keep else raw
         if "time" in out.columns:
             out["time"] = out["time"].astype(str).str.strip()
@@ -531,14 +543,18 @@ class WestockSource(DataSource):
             "250日%": "chg_250d_pct",
         }
         out = raw.rename(columns=rename)
-        for col in ("chg_5d_pct", "chg_20d_pct", "chg_60d_pct", "chg_120d_pct", "chg_250d_pct"):
+        for col in (
+            "chg_5d_pct",
+            "chg_20d_pct",
+            "chg_60d_pct",
+            "chg_120d_pct",
+            "chg_250d_pct",
+        ):
             if col in out.columns:
                 out[col] = out[col].apply(_to_number)
         return out
 
-    def get_hot(
-        self, hot_type: str = "stock", limit: int = 20
-    ) -> pd.DataFrame:
+    def get_hot(self, hot_type: str = "stock", limit: int = 20) -> pd.DataFrame:
         """热搜：stock / wx / news / board / etf。"""
         text = _call_westock(["hot", hot_type, "--limit", str(limit)])
         raw = _parse_markdown_table(text)
@@ -547,9 +563,7 @@ class WestockSource(DataSource):
         return raw
 
     # ---------------------- 投资日历 ----------------------
-    def get_calendar(
-        self, date: str | None = None, limit: int = 20
-    ) -> pd.DataFrame:
+    def get_calendar(self, date: str | None = None, limit: int = 20) -> pd.DataFrame:
         """投资日历：股东大会 / 解禁 / 分红 / 财报披露 等。"""
         args = ["calendar"]
         if date:
