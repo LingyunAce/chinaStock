@@ -45,6 +45,13 @@ def fmt_pct(v):
 
 # ============ 评分 ============
 def calc_score(d: dict) -> dict:
+    """综合评分（4 维度加权）:
+    - performance 35%  (业绩兑现度)
+    - valuation   25%  (目标价空间)
+    - sector      20%  (板块动量 - 新增)
+    - capital     20%  (资金流热度 - 新增)
+    """
+    # 1. 业绩
     fs = d.get("finance_summary", {}).get("head", [])
     ni_yoy = 0
     rev_yoy = 0
@@ -59,26 +66,108 @@ def calc_score(d: dict) -> dict:
             ni_yoy = (ni_last - ni_first) / ni_first * 100
         if rev_first > 0:
             rev_yoy = (rev_last - rev_first) / rev_first * 100
+    perf_score = round(min(100, max(0, 50 + ni_yoy)))
+
+    # 2. 估值
     cons = d.get("consensus", {})
     tp = cons.get("target_price")
     k = d.get("kline", {}).get("head", [])
     cur = _f(k[0].get("close")) if k else 0
     upside = ((tp - cur) / cur * 100) if (tp and cur > 0) else 0
-    rep_count = len(d.get("reports", {}).get("head", []))
+    val_score = round(min(100, max(0, 50 + upside)))
+
+    # 3. 板块动量
+    try:
+        from src.factors.sector_momentum import evaluate as sector_eval
+
+        sector_result = sector_eval(d.get("profile", {}))
+        sector_score = sector_result["score"]
+        sector_meta = {
+            "industry": sector_result["industry"],
+            "zdf": sector_result["industry_zdf"],
+            "rank": sector_result["industry_rank"],
+            "is_hot": sector_result["is_sector_hot"],
+            "top10": sector_result["top10_industries"],
+        }
+    except Exception:  # noqa: BLE001
+        sector_score = 50
+        sector_meta = {
+            "industry": "—",
+            "zdf": None,
+            "rank": None,
+            "is_hot": False,
+            "top10": [],
+        }
+
+    # 4. 资金流
+    try:
+        from src.factors.capital_flow import evaluate as flow_eval
+
+        westock_code = (d.get("profile", {}).get("code") or "").lower()
+        if not westock_code:
+            # 从 SYMBOL 反推
+            from scripts.gen_single_report import SYMBOL  # type: ignore
+
+            westock_code = SYMBOL.lower()
+        flow_result = flow_eval(westock_code)
+        flow_score = flow_result["score"]
+        flow_meta = {
+            "is_on_lhb": flow_result["is_on_lhb"],
+            "is_limit_up": flow_result["is_limit_up"],
+            "hot_rank": flow_result["hot_rank"],
+            "reason": flow_result["reason"],
+        }
+    except Exception:  # noqa: BLE001
+        flow_score = 50
+        flow_meta = {
+            "is_on_lhb": False,
+            "is_limit_up": False,
+            "hot_rank": None,
+            "reason": "",
+        }
+
+    # 综合 (权重调整: 业绩 35% / 估值 25% / 板块 20% / 资金 20%)
+    total = round(
+        perf_score * 0.35 + val_score * 0.25 + sector_score * 0.20 + flow_score * 0.20
+    )
+
+    # β 反弹机会检测
+    is_beta = False
+    beta_reason = ""
+    try:
+        from src.factors.sector_momentum import is_beta_rebound_opportunity
+
+        # 构造 sector_result 简版给 is_beta_rebound_opportunity
+        fake_sec = {"score": sector_score, "is_sector_hot": sector_meta["is_hot"]}
+        fake_flow = {
+            "score": flow_score,
+            "is_flow_hot": flow_meta["is_limit_up"] or flow_meta["is_on_lhb"],
+        }
+        is_beta, beta_reason = is_beta_rebound_opportunity(
+            perf_score, fake_sec, fake_flow
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
     return {
-        "perf": round(min(100, max(0, 50 + ni_yoy))),
-        "valuation": round(min(100, max(0, 50 + upside))),
-        "flow": round(min(100, rep_count * 20)),
-        "total": round(
-            min(100, max(0, 50 + ni_yoy)) * 0.4
-            + min(100, max(0, 50 + upside)) * 0.35
-            + min(100, rep_count * 20) * 0.25
-        ),
+        # 4 维分项
+        "perf": perf_score,
+        "valuation": val_score,
+        "sector": sector_score,
+        "capital": flow_score,
+        "total": total,
+        # 综合
         "ni_yoy": ni_yoy,
         "rev_yoy": rev_yoy,
         "upside": upside,
         "tp": tp,
         "cur": cur,
+        # 板块 + 资金 元数据
+        "sector_meta": sector_meta,
+        "flow_meta": flow_meta,
+        # β 反弹
+        "is_beta": is_beta,
+        "beta_reason": beta_reason,
     }
 
 
@@ -373,10 +462,70 @@ def render_header(d, score, sentiment_color, sentiment_label):
 
 
 def render_score_section(score, sentiment_color, sentiment_label, narrative):
+    sec_meta = score.get("sector_meta", {})
+    flow_meta = score.get("flow_meta", {})
+
+    # 行业 sub-line
+    sec_line = ""
+    if sec_meta.get("zdf") is not None:
+        zdf_color = "#4ade80" if sec_meta["zdf"] > 0 else "#f87171"
+        sec_line = (
+            f'<div style="margin-top:10px; font-size:12px; color:#cbd5e1">'
+            f'所属行业 <b style="color:#f1f5f9">{html.escape(str(sec_meta["industry"]))}</b>'
+            f' · 今日 <b style="color:{zdf_color}">{sec_meta["zdf"]:+.2f}%</b>'
+            f' · 排名 <b style="color:#f1f5f9">#{sec_meta.get("rank", "—")}</b>'
+            f' · 强度 <b style="color:#f1f5f9">{score["sector"]:.0f}/100</b>'
+            f' · 状态 <b style="color:{"#4ade80" if sec_meta.get("is_hot") else "#cbd5e1"}">'
+            f"{'🔥 板块热' if sec_meta.get('is_hot') else '正常'}</b>"
+            f"</div>"
+        )
+    # Top10 行业条
+    top10_html = ""
+    if sec_meta.get("top10"):
+        items = " ".join(
+            f'<span class="badge {"bull" if z and z > 0 else "bear"}" style="font-size:10px; padding:2px 6px">{html.escape(n)} {f"{z:+.1f}%" if z is not None else "—"}</span>'
+            for n, z in sec_meta["top10"][:8]
+        )
+        top10_html = f'<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:4px">{items}</div>'
+
+    # 资金流 sub-line
+    if flow_meta.get("is_limit_up") or flow_meta.get("is_on_lhb"):
+        badges = []
+        if flow_meta.get("is_limit_up"):
+            badges.append('<span class="badge bull">涨停异动</span>')
+        if flow_meta.get("is_on_lhb"):
+            badges.append('<span class="badge purple">龙虎榜</span>')
+        if flow_meta.get("hot_rank"):
+            badges.append(
+                f'<span class="badge neut">热搜 #{flow_meta["hot_rank"]}</span>'
+            )
+        flow_line = (
+            f'<div style="margin-top:10px; font-size:12px; color:#cbd5e1">'
+            f'资金流 {" ".join(badges)} · 强度 <b style="color:#f1f5f9">{score["capital"]:.0f}/100</b>'
+            f"</div>"
+            f'<div style="margin-top:4px; font-size:11px; color:#94a3b8; font-style:italic">{html.escape(flow_meta.get("reason", ""))}</div>'
+        )
+    else:
+        flow_line = (
+            f'<div style="margin-top:10px; font-size:12px; color:#94a3b8">'
+            f'资金流: 无显著异动 · 强度 <b style="color:#cbd5e1">{score["capital"]:.0f}/100</b></div>'
+        )
+
+    # β 反弹 badge
+    beta_badge = ""
+    if score.get("is_beta"):
+        beta_badge = (
+            '<div style="margin-top:14px; padding:14px 18px; background:linear-gradient(135deg,rgba(168,85,247,0.18),rgba(15,23,42,0.6)); '
+            'border-left:5px solid #a855f7; border-radius:10px; color:#ddd6fe; font-size:13px">'
+            '🔥 <b style="color:#f1f5f9">β 反弹机会</b>: 业绩偏弱, 但 '
+            "<b>板块强 + 资金流入</b>, 短线可博向上, 不必死等业绩拐点<br>"
+            f'<span style="font-size:11px; color:#a78bfa">{html.escape(score.get("beta_reason", ""))}</span>'
+            "</div>"
+        )
+
     return f"""
     <div class="section">
-      <h2 class="section-title"><span class="num">1</span>综合诊断评分</h2>
-      <p class="section-desc">业绩兑现 (40%) × 估值空间 (35%) × 资金关注 (25%) 加权</p>
+      <h2 class="section-title"><span class="num">1</span>综合诊断评分 <span style="font-size:13px; color:#94a3b8; font-weight:400">(业绩 35% · 估值 25% · 板块 20% · 资金 20%)</span></h2>
       <div class="score-grid">
         <div>
           <div class="score-circle-wrap">
@@ -388,15 +537,22 @@ def render_score_section(score, sentiment_color, sentiment_label, narrative):
           <p class="desc">{narrative}</p>
           <div class="score-grid-mini">
             <div class="score-mini {"green" if score["perf"] >= 60 else ("red" if score["perf"] < 40 else "yellow")}">
-              <div class="v">{score["perf"]}</div><div class="l">业绩 (40%)</div>
+              <div class="v">{score["perf"]}</div><div class="l">业绩 35%</div>
             </div>
             <div class="score-mini {"green" if score["valuation"] >= 60 else ("red" if score["valuation"] < 40 else "yellow")}">
-              <div class="v">{score["valuation"]}</div><div class="l">估值 (35%)</div>
+              <div class="v">{score["valuation"]}</div><div class="l">估值 25%</div>
             </div>
-            <div class="score-mini {"green" if score["flow"] >= 60 else ("red" if score["flow"] < 40 else "yellow")}">
-              <div class="v">{score["flow"]}</div><div class="l">资金 (25%)</div>
+            <div class="score-mini {"green" if score["sector"] >= 60 else ("red" if score["sector"] < 40 else "yellow")}">
+              <div class="v">{score["sector"]:.0f}</div><div class="l">板块 20%</div>
+            </div>
+            <div class="score-mini {"green" if score["capital"] >= 60 else ("red" if score["capital"] < 40 else "yellow")}">
+              <div class="v">{score["capital"]:.0f}</div><div class="l">资金 20%</div>
             </div>
           </div>
+          {sec_line}
+          {top10_html}
+          {flow_line}
+          {beta_badge}
         </div>
       </div>
     </div>
@@ -735,7 +891,7 @@ def build_html(d: dict) -> str:
     # 总结段
     score_narrative = (
         f"业绩 {score['ni_yoy']:+.1f}% YoY · 目标价 {score['tp'] or 0:.2f} 元 (现价 {score['cur']:.2f}, 空间 {score['upside']:+.1f}%)。"
-        f"3 维度打分: 业绩 {score['perf']} / 估值 {score['valuation']} / 资金 {score['flow']}。"
+        f"4 维度打分: 业绩 {score['perf']} / 估值 {score['valuation']} / 板块 {score['sector']:.0f} / 资金 {score['capital']:.0f}。"
     )
 
     # 4 风格策略
