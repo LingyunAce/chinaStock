@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """长文分析数据拉取器 - 3只票完整画像。"""
+
 from __future__ import annotations
 
 import json
@@ -62,9 +63,12 @@ def pull_one(symbol, name, ws):
             [
                 "kline",
                 to_westock(symbol),
-                "--period", "daily",
-                "--start", start.strftime("%Y%m%d"),
-                "--end", end.strftime("%Y%m%d"),
+                "--period",
+                "daily",
+                "--start",
+                start.strftime("%Y%m%d"),
+                "--end",
+                end.strftime("%Y%m%d"),
             ]
         )
         kline = _parse_markdown_table(text).rename(columns={"last": "close"})
@@ -85,7 +89,9 @@ def pull_one(symbol, name, ws):
     # 财务
     for ftype in ("summary", "lrb", "zcfz", "xjll"):
         try:
-            snap[f"finance_{ftype}"] = _df_summary(ws.get_finance(symbol, ftype, num=4), n=10)
+            snap[f"finance_{ftype}"] = _df_summary(
+                ws.get_finance(symbol, ftype, num=4), n=10
+            )
         except Exception as e:
             errors.append(f"finance_{ftype}: {e}")
 

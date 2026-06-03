@@ -1,4 +1,5 @@
 """Markdown → 简单 HTML 包装（无外部依赖）。"""
+
 import re
 import sys
 from pathlib import Path
@@ -6,9 +7,11 @@ from pathlib import Path
 md_path = Path(sys.argv[1])
 md = md_path.read_text(encoding="utf-8")
 
+
 # 极简 markdown 处理
 def esc(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
 
 # 表格转换（处理 |...| 形式）
 def table_to_html(md_text):
@@ -17,7 +20,11 @@ def table_to_html(md_text):
     i = 0
     while i < len(lines):
         line = lines[i]
-        if line.strip().startswith("|") and i + 1 < len(lines) and "---" in lines[i + 1]:
+        if (
+            line.strip().startswith("|")
+            and i + 1 < len(lines)
+            and "---" in lines[i + 1]
+        ):
             rows = []
             while i < len(lines) and lines[i].strip().startswith("|"):
                 cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
@@ -25,9 +32,9 @@ def table_to_html(md_text):
                 i += 1
             if len(rows) < 2:
                 continue
-            html_t = ['<table><thead><tr>']
+            html_t = ["<table><thead><tr>"]
             for c in rows[0]:
-                html_t.append(f'<th>{esc(c)}</th>')
+                html_t.append(f"<th>{esc(c)}</th>")
             html_t.append("</tr></thead><tbody>")
             for r in rows[2:]:  # 跳过分隔行
                 html_t.append("<tr>")
@@ -44,6 +51,7 @@ def table_to_html(md_text):
             out.append(line)
             i += 1
     return "\n".join(out)
+
 
 html_body = table_to_html(md)
 

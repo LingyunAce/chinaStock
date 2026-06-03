@@ -12,6 +12,7 @@
 
 输出：结构化报告（同时打印到 stdout + 落盘 results/）。
 """
+
 from __future__ import annotations
 
 import json
@@ -117,9 +118,14 @@ def main() -> int:
     try:
         text = _call_westock(
             [
-                "kline", WESTOCK_CODE, "--period", "daily",
-                "--start", start_date.replace("-", ""),
-                "--end", end_date.replace("-", ""),
+                "kline",
+                WESTOCK_CODE,
+                "--period",
+                "daily",
+                "--start",
+                start_date.replace("-", ""),
+                "--end",
+                end_date.replace("-", ""),
             ],
             timeout=20,
         )
@@ -142,7 +148,9 @@ def main() -> int:
 
     # 跨源对比
     if not kline_ak.empty and not kline_ws.empty and "last" in kline_ws.columns:
-        ws_norm = kline_ws.rename(columns={"last": "close"})[["date", "close", "volume"]].copy()
+        ws_norm = kline_ws.rename(columns={"last": "close"})[
+            ["date", "close", "volume"]
+        ].copy()
         ws_norm.columns = ["date", "close_ws", "volume_ws"]
         if "close" in kline_ak.columns:
             ak_norm = kline_ak[["date", "close"]].copy()
@@ -150,7 +158,9 @@ def main() -> int:
             merged = ws_norm.merge(ak_norm, on="date", how="inner")
             if not merged.empty:
                 merged["diff_pct"] = (
-                    (merged["close_ak"] - merged["close_ws"]).abs() / merged["close_ws"] * 100
+                    (merged["close_ak"] - merged["close_ws"]).abs()
+                    / merged["close_ws"]
+                    * 100
                 )
                 print()
                 print("  跨源 K 线差异 (AKShare vs westock):")
@@ -188,6 +198,7 @@ def main() -> int:
     # AKShare 备份
     try:
         from src.integrations.lhb import get_lhb as get_lhb_ak
+
         lhb_ak = get_lhb_ak(SYMBOL, recent_trade_date, source=ak)
         on_lhb_ak = not lhb_ak.empty
         print(f"  [AKShare] 当日上榜: {_yesno(on_lhb_ak)}")
@@ -208,7 +219,8 @@ def main() -> int:
             print(f"\n  涨停池大小: {len(pool)}")
             if not pool.empty:
                 cols = [
-                    c for c in ("symbol", "name", "consecutive_boards", "pct_change")
+                    c
+                    for c in ("symbol", "name", "consecutive_boards", "pct_change")
                     if c in pool.columns
                 ]
                 print("  涨停 TOP 10 (按连板数):")
@@ -240,7 +252,11 @@ def main() -> int:
     if sectors:
         try:
             hits = detect_sector_resonance(
-                SYMBOL, recent_trade_date, lookback_days=5, pct_threshold=3.0, source=ak,
+                SYMBOL,
+                recent_trade_date,
+                lookback_days=5,
+                pct_threshold=3.0,
+                source=ak,
             )
             print(f"\n  板块共振 (5 日累计涨幅 >=3%): {len(hits)} / {len(sectors)}")
             for h in hits[:10]:
@@ -269,17 +285,22 @@ def main() -> int:
     # ------------------------------------------------------------------
     print("  (a) 龙虎榜信号强度 (当日全市场, westock):")
     try:
-        sig = lhb_signal_score(recent_trade_date, source=ak)  # 用 AKShare 优先，没拉到空也行
+        sig = lhb_signal_score(
+            recent_trade_date, source=ak
+        )  # 用 AKShare 优先，没拉到空也行
         if sig.empty:
             # fallback: 用 westock 的 lhb 数据
-            from src.factors.lhb_flow import institutional_net_buy
             print("  AKShare 不可达，fallback 到 westock 龙虎榜因子...")
             # 简化处理：westock 拉到的 lhb_df 已经是 DataFrame，直接做 institutional 因子
             if not lhb_df.empty and "净买入额" in lhb_df.columns:
                 lhb_df["net_buy_amount"] = lhb_df["净买入额"]
                 lhb_df["date"] = recent_trade_date
                 lhb_df["value"] = lhb_df["net_buy_amount"]
-                print(lhb_df[["代码", "名称", "净买入额", "value"]].head(10).to_string(index=False))
+                print(
+                    lhb_df[["代码", "名称", "净买入额", "value"]]
+                    .head(10)
+                    .to_string(index=False)
+                )
         else:
             _df_summary(sig, n=5)
     except Exception as e:
@@ -306,14 +327,14 @@ def main() -> int:
     judgments = []
     if not kline_ws.empty and "last" in kline_ws.columns and "open" in kline_ws.columns:
         latest = kline_ws.iloc[0]
-        latest_change = float(latest['last']) / float(latest['open']) - 1
+        latest_change = float(latest["last"]) / float(latest["open"]) - 1
         judgments.append(
             f"最新收盘 {latest['last']} (westock, {latest['date']}), 当日 {latest_change:+.2%}"
         )
         # 5 日累计
         if len(kline_ws) >= 5:
-            close_5d_ago = float(kline_ws.iloc[4]['last'])
-            cum_5d = float(latest['last']) / close_5d_ago - 1
+            close_5d_ago = float(kline_ws.iloc[4]["last"])
+            cum_5d = float(latest["last"]) / close_5d_ago - 1
             judgments.append(f"近 5 日累计: {cum_5d:+.2%}")
 
     if on_lhb_westock:

@@ -7,6 +7,7 @@
 依赖：westock（本地 Node CLI）作为主数据源，AKShare 作为补充。
 网络不可达时优雅降级，仍输出已拉到的部分。
 """
+
 from __future__ import annotations
 
 import html
@@ -29,12 +30,10 @@ from src.data_sources.westock_source import (  # noqa: E402
     _parse_markdown_table,
 )
 from src.integrations.limit_up import (  # noqa: E402
-    get_limit_up_pool,
     market_sentiment_score,
 )
 from src.integrations.sectors import (  # noqa: E402
     find_symbol_sectors,
-    get_sector_performance,
 )
 
 # ----------------------------- 配置 -----------------------------
@@ -49,6 +48,7 @@ WESTOCK_CODE_MAP = {
     "SH600584": "sh600584",
     "SH601138": "sh601138",
 }
+
 
 # ----------------------------- 工具 -----------------------------
 def _westock_kline(code: str, days: int) -> pd.DataFrame:
@@ -89,11 +89,12 @@ def _westock_lhb_top(date: str, n: int = 5) -> pd.DataFrame:
         df = _parse_markdown_table(text)
         if "净买入额" in df.columns:
             df["net_buy_amount"] = df["净买入额"].apply(
-                lambda x: float(str(x).replace("亿", "").replace("万", "")) * (
-                    1e8 if "亿" in str(x) else (1e4 if "万" in str(x) else 1)
+                lambda x: (
+                    float(str(x).replace("亿", "").replace("万", ""))
+                    * (1e8 if "亿" in str(x) else (1e4 if "万" in str(x) else 1))
+                    if pd.notna(x)
+                    else 0
                 )
-                if pd.notna(x)
-                else 0
             )
         return df.head(n)
     except Exception:
@@ -167,9 +168,7 @@ def analyze_one(symbol: str, name: str, ak: AkShareSource) -> dict:
             metrics["chg_5d_pct"] = (metrics["latest_close"] / close_5d_ago - 1) * 100
         if len(df) >= 20:
             close_20d_ago = float(df.iloc[19]["close"])
-            metrics["chg_20d_pct"] = (
-                metrics["latest_close"] / close_20d_ago - 1
-            ) * 100
+            metrics["chg_20d_pct"] = (metrics["latest_close"] / close_20d_ago - 1) * 100
         if "amount" in df.columns and len(df) >= 5:
             metrics["avg_amount_5d_wan"] = float(df.head(5)["amount"].mean()) / 1e4
         if "high" in df.columns and "low" in df.columns and len(df) >= 20:
@@ -306,15 +305,15 @@ def _card_html(r: dict) -> str:
     industry = r.get("profile", {}).get("industry", "—")
     return f"""
     <div class="card">
-      <div class="ticker">{html.escape(r['symbol'])} {lhb_tag}</div>
-      <div class="name">{html.escape(r['name'])} · {html.escape(industry)}</div>
+      <div class="ticker">{html.escape(r["symbol"])} {lhb_tag}</div>
+      <div class="name">{html.escape(r["name"])} · {html.escape(industry)}</div>
       <div class="price">{price:.2f}</div>
       <div class="chg {chg_class}">当日 {chg_str}</div>
-      <div class="metric"><span>5 日累计</span><b style="color:{'#d32f2f' if m.get('chg_5d_pct', 0)>=0 else '#2e7d32'}">{m.get('chg_5d_pct', 0):+.2f}%</b></div>
-      <div class="metric"><span>20 日累计</span><b style="color:{'#d32f2f' if m.get('chg_20d_pct', 0)>=0 else '#2e7d32'}">{m.get('chg_20d_pct', 0):+.2f}%</b></div>
-      <div class="metric"><span>20 日区间位置</span><b>{m.get('pos_in_20d_range', 0)*100:.0f}%</b></div>
-      <div class="metric"><span>5 日均成交额(万)</span><b>{m.get('avg_amount_5d_wan', 0):,.0f}</b></div>
-      <div class="metric"><span>最新交易日</span><b>{m.get('latest_date', '—')}</b></div>
+      <div class="metric"><span>5 日累计</span><b style="color:{"#d32f2f" if m.get("chg_5d_pct", 0) >= 0 else "#2e7d32"}">{m.get("chg_5d_pct", 0):+.2f}%</b></div>
+      <div class="metric"><span>20 日累计</span><b style="color:{"#d32f2f" if m.get("chg_20d_pct", 0) >= 0 else "#2e7d32"}">{m.get("chg_20d_pct", 0):+.2f}%</b></div>
+      <div class="metric"><span>20 日区间位置</span><b>{m.get("pos_in_20d_range", 0) * 100:.0f}%</b></div>
+      <div class="metric"><span>5 日均成交额(万)</span><b>{m.get("avg_amount_5d_wan", 0):,.0f}</b></div>
+      <div class="metric"><span>最新交易日</span><b>{m.get("latest_date", "—")}</b></div>
     </div>
     """
 
@@ -414,7 +413,11 @@ def _sectors_block(stocks: list[dict]) -> str:
     parts = ["<h2>6. 所属概念板块（每只票）</h2>"]
     for r in stocks:
         sec = r.get("sectors", [])
-        sec_str = ", ".join(sec[:15]) if sec else "（AKShare 不可达，详见 westock profile 所属行业）"
+        sec_str = (
+            ", ".join(sec[:15])
+            if sec
+            else "（AKShare 不可达，详见 westock profile 所属行业）"
+        )
         parts.append(
             f"<div class='meta'><b>{r['symbol']} {r['name']}</b> · {html.escape(sec_str)}</div>"
         )
@@ -428,15 +431,15 @@ def _lhb_block(stocks: list[dict], date: str) -> str:
     rows = []
     for _, row in df.iterrows():
         rows.append(
-            f"<tr><td>{html.escape(str(row.get('代码','')))}</td>"
-            f"<td>{html.escape(str(row.get('名称','')))}</td>"
-            f"<td style='text-align:right'>{row.get('净买入额','-')}</td>"
-            f"<td style='text-align:right'>{row.get('涨跌幅','-')}</td></tr>"
+            f"<tr><td>{html.escape(str(row.get('代码', '')))}</td>"
+            f"<td>{html.escape(str(row.get('名称', '')))}</td>"
+            f"<td style='text-align:right'>{row.get('净买入额', '-')}</td>"
+            f"<td style='text-align:right'>{row.get('涨跌幅', '-')}</td></tr>"
         )
     return f"""
     <table class="summary">
       <thead><tr><th style="text-align:left">代码</th><th style="text-align:left">名称</th><th>净买入额</th><th>涨跌幅</th></tr></thead>
-      <tbody>{''.join(rows)}</tbody>
+      <tbody>{"".join(rows)}</tbody>
     </table>
     """
 
@@ -444,14 +447,16 @@ def _lhb_block(stocks: list[dict], date: str) -> str:
 def _sentiment_block(date: str, ak: AkShareSource) -> str:
     try:
         s = market_sentiment_score(date, source=ak)
-        sent_class = "on" if s["sentiment"] == "overheat" else (
-            "warn" if s["sentiment"] == "normal" else "off"
+        sent_class = (
+            "on"
+            if s["sentiment"] == "overheat"
+            else ("warn" if s["sentiment"] == "normal" else "off")
         )
         return f"""
         <div class="meta">
           <b>当日市场情绪:</b>
-          <span class="tag {sent_class}">{s['sentiment'].upper()}</span>
-          涨停 {s['limit_up_count']} 只 | 最高 {s['max_consecutive']} 连板 | 炸板率 {s['broken_ratio']*100:.1f}%
+          <span class="tag {sent_class}">{s["sentiment"].upper()}</span>
+          涨停 {s["limit_up_count"]} 只 | 最高 {s["max_consecutive"]} 连板 | 炸板率 {s["broken_ratio"] * 100:.1f}%
         </div>
         """
     except Exception as e:
@@ -474,7 +479,7 @@ def main() -> int:
         results.append(r)
         m = r.get("metrics", {})
         print(
-            f"      最新: {m.get('latest_close','-')}  5d: {m.get('chg_5d_pct',0):+.2f}%  "
+            f"      最新: {m.get('latest_close', '-')}  5d: {m.get('chg_5d_pct', 0):+.2f}%  "
             f"上榜: {r.get('on_lhb')}"
         )
 
@@ -488,16 +493,30 @@ def main() -> int:
         lookback=LOOKBACK_DAYS,
         sentiment_block=_sentiment_block(recent, ak),
         cards="\n".join(_card_html(r) for r in results),
-        metric_headers="".join(f"<th>{html.escape(r['symbol'])}<br><span style='font-weight:400;color:#888'>{html.escape(r['name'])}</span></th>" for r in results),
+        metric_headers="".join(
+            f"<th>{html.escape(r['symbol'])}<br><span style='font-weight:400;color:#888'>{html.escape(r['name'])}</span></th>"
+            for r in results
+        ),
         metric_rows="\n".join(
-            f"<tr><td>{label}</td>" + "".join(
-                f"<td style='color:{'#d32f2f' if v>=0 else '#2e7d32'}'>{v:+.2f}%</td>"
+            f"<tr><td>{label}</td>"
+            + "".join(
+                f"<td style='color:{'#d32f2f' if v >= 0 else '#2e7d32'}'>{v:+.2f}%</td>"
                 for v in vals
-            ) + "</tr>"
+            )
+            + "</tr>"
             for label, vals in [
-                ("当日涨幅", [r.get("metrics", {}).get("day_chg_pct", 0) for r in results]),
-                ("5 日累计", [r.get("metrics", {}).get("chg_5d_pct", 0) for r in results]),
-                ("20 日累计", [r.get("metrics", {}).get("chg_20d_pct", 0) for r in results]),
+                (
+                    "当日涨幅",
+                    [r.get("metrics", {}).get("day_chg_pct", 0) for r in results],
+                ),
+                (
+                    "5 日累计",
+                    [r.get("metrics", {}).get("chg_5d_pct", 0) for r in results],
+                ),
+                (
+                    "20 日累计",
+                    [r.get("metrics", {}).get("chg_20d_pct", 0) for r in results],
+                ),
             ]
         ),
         kline_js=_kline_chart_js(results),

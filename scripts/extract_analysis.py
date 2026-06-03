@@ -1,6 +1,6 @@
 """Extract key per-stock analysis from the long_form JSON."""
+
 import json
-from pathlib import Path
 
 d = json.load(open("reports/long_form_data_20260603.json", encoding="utf-8"))
 
@@ -20,9 +20,13 @@ for s in d["stocks"]:
         rev = float(last["TotalOperatingRevenueTTM"])
         ni = float(last["NPParentCompanyOwnersTTM"])
         eps = float(last["BasicEPS"])
-        rev_yoy = float(fs[-1]["TotalOperatingRevenueTTM"]) / float(fs[0]["TotalOperatingRevenueTTM"]) - 1
-        print(f"  2025 营收 TTM:     {rev/1e8:>10.2f} 亿")
-        print(f"  2025 归母净利 TTM: {ni/1e8:>10.2f} 亿")
+        rev_yoy = (
+            float(fs[-1]["TotalOperatingRevenueTTM"])
+            / float(fs[0]["TotalOperatingRevenueTTM"])
+            - 1
+        )
+        print(f"  2025 营收 TTM:     {rev / 1e8:>10.2f} 亿")
+        print(f"  2025 归母净利 TTM: {ni / 1e8:>10.2f} 亿")
         print(f"  2025 EPS:          {eps:>10.4f}")
         if prev:
             ni_prev = float(prev["NPParentCompanyOwnersTTM"])
@@ -32,7 +36,7 @@ for s in d["stocks"]:
     # 一致预期
     cons = s.get("consensus", {})
     if cons and cons.get("forecasts"):
-        print(f"  一致预期:")
+        print("  一致预期:")
         for f in cons["forecasts"][:3]:
             yr = f.get("year", "?")
             rev = float(f.get("revenue", 0)) / 1e8
