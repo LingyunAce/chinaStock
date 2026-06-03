@@ -202,7 +202,9 @@ HTML_HEAD = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{title} · 端到端分析</title>
+<title>__TITLE__ · 端到端分析</title>
+<meta name="description" content="__NAME__ __SYMBOL__ 端到端分析报告" />
+<meta property="og:title" content="__NAME__ __SYMBOL__" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -430,7 +432,7 @@ body {
 DISCLAIMER = """
 <div class="disclaimer">
 <b>⚠️ 重要免责声明</b><br>
-本分析基于截至 {date} 的腾讯自选股（westock-data）公开数据，
+本分析基于截至 __DATE__ 的腾讯自选股（westock-data）公开数据，
 结合 LLM 编排的跨域信号交叉生成。<br>
 <b>不构成证券投资建议</b>。任何标的都需结合最新行情与自身风险承受能力做决策。<b>市场有风险，决策需谨慎。</b>
 </div>
@@ -443,12 +445,47 @@ def render_header(d, score, sentiment_color, sentiment_label):
     latest = k[0] if k else {}
     cur = _f(latest.get("close"))
     day_chg = (_f(latest.get("close")) / _f(latest.get("open")) - 1) * 100
+    name = d.get("name", "") or d.get("symbol", "")
+    symbol = d.get("symbol", "")
+    profile = d.get("profile", {}) or {}
+    industry = profile.get("industry", "—")
+    listed = profile.get("listedDate", "—")
+    # 板块 + 资金 sub-tag
+    sec_meta = score.get("sector_meta", {})
+    flow_meta = score.get("flow_meta", {})
+    extra_badges = []
+    if sec_meta.get("is_hot"):
+        extra_badges.append(
+            f'<span class="badge bull" style="font-size:11px">🔥 板块热 ({sec_meta.get("industry", "")} #{sec_meta.get("rank", "?")})</span>'
+        )
+    if flow_meta.get("is_limit_up"):
+        extra_badges.append(
+            '<span class="badge bull" style="font-size:11px">涨停异动</span>'
+        )
+    if flow_meta.get("is_on_lhb"):
+        extra_badges.append(
+            '<span class="badge purple" style="font-size:11px">龙虎榜</span>'
+        )
+    if score.get("is_beta"):
+        extra_badges.append(
+            '<span class="badge purple" style="font-size:11px">🔥 β 反弹</span>'
+        )
+    extra_html = " ".join(extra_badges)
     return f"""
     <div class="header">
       <div class="header-content">
         <span class="stock-tag">🤖 chinaStock · 单股深度分析框架 v1.0</span>
-        <h1>{html.escape(d["name"])} ({d["symbol"]})</h1>
-        <p class="subtitle">盘口 × 业绩 × 估值 × 资金 四维交叉验证  |  截至 {d.get("pulled_at", "")[:10]}</p>
+        <h1>
+          <span style="font-size:46px; font-weight:900; background:linear-gradient(135deg,#fbbf24,#f87171); -webkit-background-clip:text; -webkit-text-fill-color:transparent">
+            {html.escape(name)}
+          </span>
+          <span style="font-size:18px; color:#94a3b8; font-weight:400; margin-left:8px">{html.escape(symbol)}</span>
+        </h1>
+        <p class="subtitle">
+          <span style="color:#cbd5e1; font-weight:600">{html.escape(industry)}</span>
+          <span style="color:#64748b">  ·  上市 {html.escape(listed)}  ·  截至 {d.get("pulled_at", "")[:10]}</span>
+        </p>
+        <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px">{extra_html}</div>
         <div class="header-meta">
           <div class="item"><div class="label">现价</div><div class="value">{cur:.2f}</div></div>
           <div class="item {"green" if day_chg >= 0 else "red"}"><div class="label">当日</div><div class="value">{day_chg:+.2f}%</div></div>
@@ -876,6 +913,16 @@ def render_conclusion(score, narratives):
 
 
 # ============ Main ============
+def _safe_filename(text: str) -> str:
+    """把中文名 (含空格/特殊字符) 转成安全的 file name 后缀。"""
+    if not text:
+        return ""
+    # 去掉文件系统不合法字符
+    for ch in '<>:"/\\|?*':
+        text = text.replace(ch, "")
+    return text.strip().replace(" ", "_")
+
+
 def build_html(d: dict) -> str:
     score = calc_score(d)
     if score["total"] >= 60:
@@ -887,6 +934,12 @@ def build_html(d: dict) -> str:
     else:
         sentiment_color = BEAR
         sentiment_label = "弱信号"
+
+    # 中文名 (fallback: 用 symbol)
+    name = d.get("name") or ""
+    symbol = d.get("symbol", "")
+    if not name:
+        name = symbol
 
     # 总结段
     score_narrative = (
@@ -966,7 +1019,9 @@ def build_html(d: dict) -> str:
     """
 
     parts = [
-        HTML_HEAD,
+        HTML_HEAD.replace("__TITLE__", f"{html.escape(name)} ({html.escape(symbol)})")
+        .replace("__NAME__", html.escape(name))
+        .replace("__SYMBOL__", html.escape(symbol)),
         render_header(d, score, sentiment_color, sentiment_label),
         render_score_section(score, sentiment_color, sentiment_label, score_narrative),
         render_metrics_grid(d, score),
@@ -978,7 +1033,7 @@ def build_html(d: dict) -> str:
         render_reports(d),
         render_strategy(d, score, narrative_strategies),
         render_conclusion(score, conclusions),
-        DISCLAIMER.format(date=datetime.now().strftime("%Y-%m-%d")),
+        DISCLAIMER.replace("__DATE__", datetime.now().strftime("%Y-%m-%d")),
         "</div></body></html>",
     ]
     return "".join(parts)
@@ -994,7 +1049,15 @@ def main():
         return 1
     d = json.loads(src.read_text(encoding="utf-8"))
     html_out = build_html(d)
-    out_file = src.with_name(f"report_{src.stem.replace('long_form_', '')}.html")
+    symbol = d.get("symbol", src.stem.replace("long_form_", ""))
+    name = d.get("name", "")
+    # 文件名: report_SH600584_长电科技.html (fallback: 只用 symbol)
+    safe_name = _safe_filename(name)
+    if safe_name:
+        out_name = f"report_{symbol}_{safe_name}.html"
+    else:
+        out_name = f"report_{symbol}.html"
+    out_file = src.with_name(out_name)
     out_file.write_text(html_out, encoding="utf-8")
     print(f"[OK] {out_file}  ({out_file.stat().st_size / 1024:.1f} KB)")
     return 0
