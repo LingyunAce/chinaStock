@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>回测结果 · chinaStock 信号验证</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:linear-gradient(135deg,#0a0e27 0%,#1a1f3a 50%,#0f1729 100%);
+  color:#e0e6f1; min-height:100vh; padding:24px; line-height:1.6;
+}
+.container { max-width:1400px; margin:0 auto; }
+.header {
+  background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(168,85,247,0.10));
+  border:1px solid rgba(168,85,247,0.3); border-radius:24px;
+  padding:40px 50px; margin-bottom:24px; position:relative; overflow:hidden;
+  backdrop-filter:blur(20px);
+}
+.header::before {
+  content:''; position:absolute; top:-50%; right:-10%; width:500px; height:500px;
+  background:radial-gradient(circle,rgba(168,85,247,0.3),transparent 70%); border-radius:50%;
+}
+.header-content { position:relative; z-index:1; }
+.stock-tag {
+  display:inline-block; padding:6px 14px;
+  background:rgba(168,85,247,0.2); border:1px solid rgba(168,85,247,0.4);
+  border-radius:20px; font-size:13px; color:#ddd6fe;
+  font-weight:600; margin-bottom:16px;
+}
+.header h1 {
+  font-size:38px; font-weight:800;
+  background:linear-gradient(135deg,#60a5fa,#a855f7,#f59e0b);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  margin-bottom:12px;
+}
+.header .subtitle { color:#94a3b8; font-size:16px; margin-bottom:20px; }
+.header-meta { display:flex; gap:14px; flex-wrap:wrap; margin-top:20px; }
+.header-meta .item {
+  background:rgba(15,23,42,0.6); padding:12px 18px;
+  border-radius:12px; border:1px solid rgba(148,163,184,0.15);
+  min-width:110px;
+}
+.header-meta .item .label { font-size:11px; color:#64748b; text-transform:uppercase; }
+.header-meta .item .value { font-size:20px; font-weight:700; color:#f1f5f9; margin-top:4px; }
+.header-meta .item.green .value { color:#4ade80; }
+.header-meta .item.red .value { color:#f87171; }
+
+.section {
+  background:rgba(30,41,59,0.5); border:1px solid rgba(148,163,184,0.15);
+  border-radius:20px; padding:32px; margin-bottom:24px; backdrop-filter:blur(10px);
+}
+.section-title {
+  font-size:22px; font-weight:700; color:#f1f5f9;
+  margin-bottom:6px; display:flex; align-items:center; gap:12px;
+}
+.section-title .num {
+  background:linear-gradient(135deg,#6366f1,#a855f7);
+  color:white; width:36px; height:36px; border-radius:10px;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:16px; font-weight:800;
+}
+.section-desc { color:#94a3b8; font-size:14px; margin-bottom:20px; }
+
+.matrix { width:100%; border-collapse:collapse; font-size:13px; margin-top:12px; }
+.matrix th {
+  background:rgba(99,102,241,0.15); color:#c7d2fe;
+  padding:12px 14px; text-align:left; font-weight:600;
+  border-bottom:2px solid rgba(99,102,241,0.3);
+}
+.matrix th:first-child { border-top-left-radius:10px; }
+.matrix th:last-child { border-top-right-radius:10px; }
+.matrix td {
+  padding:11px 14px; border-bottom:1px solid rgba(148,163,184,0.1);
+  color:#cbd5e1;
+}
+.matrix tr:hover td { background:rgba(99,102,241,0.05); }
+.matrix td:first-child { color:#f1f5f9; font-weight:600; }
+.matrix .v { text-align:right; }
+.matrix .pos { color:#4ade80; font-weight:600; }
+.matrix .neg { color:#f87171; font-weight:600; }
+.matrix .neu { color:#facc15; font-weight:600; }
+
+.badge {
+  display:inline-block; padding:4px 10px; border-radius:8px;
+  font-size:11px; font-weight:700; letter-spacing:0.5px;
+}
+.badge.bull { background:rgba(34,197,94,0.2); color:#4ade80; border:1px solid rgba(34,197,94,0.4); }
+.badge.bear { background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.4); }
+.badge.neut { background:rgba(234,179,8,0.2); color:#facc15; border:1px solid rgba(234,179,8,0.4); }
+
+.chart-box {
+  background:rgba(15,23,42,0.6); border-radius:14px;
+  padding:20px; height:400px; border:1px solid rgba(148,163,184,0.1);
+}
+.chart-box canvas { max-height:360px; }
+
+.disclaimer {
+  background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.2);
+  border-radius:14px; padding:20px 28px; color:#fca5a5;
+  font-size:13px; margin-top:30px; line-height:1.8;
+}
+.disclaimer b { color:#fef2f2; }
+
+@media (max-width:1100px) {
+  .header-meta { flex-direction:column; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-content">
+      <span class="stock-tag">📊 chinaStock 回测引擎 v1.0 · 技术信号历史验证</span>
+      <h1>回测结果报告</h1>
+      <p class="subtitle">7 只票 × 4 个策略 = 28 个回测 · 数据窗口: ~2 年日 K</p>
+      <div class="header-meta">
+        <div class="item"><div class="label">股票数</div><div class="value">7</div></div>
+        <div class="item"><div class="label">策略数</div><div class="value">4</div></div>
+        <div class="item"><div class="label">回测数</div><div class="value">28</div></div>
+        <div class="item"><div class="label">最佳年化</div><div class="value" style="color:#4ade80">+379.9%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title"><span class="num">1</span>最佳策略汇总</h2>
+    <p class="section-desc">每只票年化收益最高的策略</p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px; margin-top:12px">
+      
+            <div style="background:rgba(15,23,42,0.6); padding:16px; border-radius:12px; border:1px solid rgba(148,163,184,0.15);">
+              <div style="font-size:16px; font-weight:700; color:#f1f5f9">SZ002281</div>
+              <div style="font-size:12px; color:#94a3b8; margin-top:4px">最佳: MACD 金叉</div>
+              <div style="font-size:24px; font-weight:800; color:#4ade80; margin-top:8px">
+                +221.57%
+              </div>
+              <div style="font-size:11px; color:#64748b; margin-top:4px">
+                Sharpe 2.76 · 回撤 19.1% · 胜率 85%
+              </div>
+            </div>
+            
+            <div style="background:rgba(15,23,42,0.6); padding:16px; border-radius:12px; border:1px solid rgba(148,163,184,0.15);">
+              <div style="font-size:16px; font-weight:700; color:#f1f5f9">SZ000988</div>
+              <div style="font-size:12px; color:#94a3b8; margin-top:4px">最佳: MACD 金叉</div>
+              <div style="font-size:24px; font-weight:800; color:#4ade80; margin-top:8px">
+                +134.89%
+              </div>
+              <div style="font-size:11px; color:#64748b; margin-top:4px">
+                Sharpe 2.28 · 回撤 17.1% · 胜率 76%
+              </div>
+            </div>
+            
+            <div style="background:rgba(15,23,42,0.6); padding:16px; border-radius:12px; border:1px solid rgba(148,163,184,0.15);">
+              <div style="font-size:16px; font-weight:700; color:#f1f5f9">SH600522</div>
+              <div style="font-size:12px; color:#94a3b8; margin-top:4px">最佳: MACD 金叉</div>
+              <div style="font-size:24px; font-weight:800; color:#4ade80; margin-top:8px">
+                +88.91%
+              </div>
+              <div style="font-size:11px; color:#64748b; margin-top:4px">
+                Sharpe 1.99 · 回撤 17.1% · 胜率 81%
+              </div>
+            </div>
+            
+            <div style="background:rgba(15,23,42,0.6); padding:16px; border-radius:12px; border:1px solid rgba(148,163,184,0.15);">
+              <div style="font-size:16px; font-weight:700; color:#f1f5f9">SH601869</div>
+              <div style="font-size:12px; color:#94a3b8; margin-top:4px">最佳: MACD 金叉</div>
+              <div style="font-size:24px; font-weight:800; color:#4ade80; margin-top:8px">
+                +379.89%
+              </div>
+              <div style="font-size:11px; color:#64748b; margin-top:4px">
+                Sharpe 3.38 · 回撤 14.9% · 胜率 87%
+              </div>
+            </div>
+            
+            <div style="background:rgba(15,23,42,0.6); padding:16px; border-radius:12px; border:1px solid rgba(148,163,184,0.15);">
+              <div style="font-size:16px; font-weight:700; color:#f1f5f9">SH600487</div>
+              <div style="font-size:12px; color:#94a3b8; margin-top:4px">最佳: MACD 金叉</div>
+              <div style="font-size:24px; font-weight:800; color:#4ade80; margin-top:8px">
+                +139.22%
+              </div>
+              <div style="font-size:11px; color:#64748b; margin-top:4px">
+                Sharpe 2.35 · 回撤 18.9% · 胜率 52%
+              </div>
+            </div>
+            
+            <div style="background:rgba(15,23,42,0.6); padding:16px; border-radius:12px; border:1px solid rgba(148,163,184,0.15);">
+              <div style="font-size:16px; font-weight:700; color:#f1f5f9">SH601138</div>
+              <div style="font-size:12px; color:#94a3b8; margin-top:4px">最佳: MACD 金叉</div>
+              <div style="font-size:24px; font-weight:800; color:#4ade80; margin-top:8px">
+                +143.79%
+              </div>
+              <div style="font-size:11px; color:#64748b; margin-top:4px">
+                Sharpe 2.25 · 回撤 20.0% · 胜率 68%
+              </div>
+            </div>
+            
+            <div style="background:rgba(15,23,42,0.6); padding:16px; border-radius:12px; border:1px solid rgba(148,163,184,0.15);">
+              <div style="font-size:16px; font-weight:700; color:#f1f5f9">SH600584</div>
+              <div style="font-size:12px; color:#94a3b8; margin-top:4px">最佳: MACD 金叉</div>
+              <div style="font-size:24px; font-weight:800; color:#4ade80; margin-top:8px">
+                +140.09%
+              </div>
+              <div style="font-size:11px; color:#64748b; margin-top:4px">
+                Sharpe 2.61 · 回撤 14.7% · 胜率 82%
+              </div>
+            </div>
+            
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title"><span class="num">2</span>年化收益对比 (按策略分组)</h2>
+    <p class="section-desc">每只票在不同策略下的年化收益，越高越好</p>
+    <div class="chart-box"><canvas id="returnChart"></canvas></div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title"><span class="num">3</span>详细回测结果</h2>
+    <p class="section-desc">所有 28 个回测的完整指标</p>
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>标的</th><th>策略</th><th class="v">年化收益</th><th class="v">总收益</th>
+          <th class="v">Sharpe</th><th class="v">最大回撤</th><th class="v">胜率</th>
+          <th class="v">盈亏比</th><th class="v">交易次数</th><th class="v">期末资金</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>SZ002281</td>
+          <td>MA5/10 金叉</td>
+          <td class="v pos">+148.32%</td>
+          <td class="v pos">+507.81%</td>
+          <td class="v pos">2.085</td>
+          <td class="v neg">31.1%</td>
+          <td class="v pos">74%</td>
+          <td class="v">3.45</td>
+          <td class="v">23</td>
+          <td class="v">6,078,092</td>
+        </tr>
+        
+        <tr>
+          <td>SZ002281</td>
+          <td>MACD 金叉</td>
+          <td class="v pos">+221.57%</td>
+          <td class="v pos">+915.09%</td>
+          <td class="v pos">2.760</td>
+          <td class="v neu">19.1%</td>
+          <td class="v pos">85%</td>
+          <td class="v">4.35</td>
+          <td class="v">20</td>
+          <td class="v">10,150,887</td>
+        </tr>
+        
+        <tr>
+          <td>SZ002281</td>
+          <td>多信号投票 (≥3)</td>
+          <td class="v pos">+63.88%</td>
+          <td class="v pos">+166.48%</td>
+          <td class="v pos">1.414</td>
+          <td class="v neg">32.6%</td>
+          <td class="v pos">100%</td>
+          <td class="v">175.62</td>
+          <td class="v">1</td>
+          <td class="v">2,664,772</td>
+        </tr>
+        
+        <tr>
+          <td>SZ002281</td>
+          <td>多信号投票 (≥2)</td>
+          <td class="v pos">+63.88%</td>
+          <td class="v pos">+166.48%</td>
+          <td class="v pos">1.414</td>
+          <td class="v neg">32.6%</td>
+          <td class="v pos">100%</td>
+          <td class="v">175.62</td>
+          <td class="v">1</td>
+          <td class="v">2,664,772</td>
+        </tr>
+        
+        <tr>
+          <td>SZ000988</td>
+          <td>MA5/10 金叉</td>
+          <td class="v pos">+84.24%</td>
+          <td class="v pos">+236.17%</td>
+          <td class="v pos">1.636</td>
+          <td class="v neu">18.4%</td>
+          <td class="v pos">62%</td>
+          <td class="v">3.36</td>
+          <td class="v">24</td>
+          <td class="v">3,361,685</td>
+        </tr>
+        
+        <tr>
+          <td>SZ000988</td>
+          <td>MACD 金叉</td>
+          <td class="v pos">+134.89%</td>
+          <td class="v pos">+444.33%</td>
+          <td class="v pos">2.281</td>
+          <td class="v neu">17.1%</td>
+          <td class="v pos">76%</td>
+          <td class="v">5.73</td>
+          <td class="v">25</td>
+          <td class="v">5,443,255</td>
+        </tr>
+        
+        <tr>
+          <td>SZ000988</td>
+          <td>多信号投票 (≥3)</td>
+          <td class="v pos">+83.88%</td>
+          <td class="v pos">+234.87%</td>
+          <td class="v pos">1.693</td>
+          <td class="v neg">30.8%</td>
+          <td class="v pos">100%</td>
+          <td class="v">92.42</td>
+          <td class="v">2</td>
+          <td class="v">3,348,745</td>
+        </tr>
+        
+        <tr>
+          <td>SZ000988</td>
+          <td>多信号投票 (≥2)</td>
+          <td class="v pos">+83.88%</td>
+          <td class="v pos">+234.87%</td>
+          <td class="v pos">1.693</td>
+          <td class="v neg">30.8%</td>
+          <td class="v pos">100%</td>
+          <td class="v">92.42</td>
+          <td class="v">2</td>
+          <td class="v">3,348,745</td>
+        </tr>
+        
+        <tr>
+          <td>SH600522</td>
+          <td>MA5/10 金叉</td>
+          <td class="v pos">+59.94%</td>
+          <td class="v pos">+153.89%</td>
+          <td class="v pos">1.454</td>
+          <td class="v neu">17.5%</td>
+          <td class="v pos">57%</td>
+          <td class="v">2.75</td>
+          <td class="v">30</td>
+          <td class="v">2,538,936</td>
+        </tr>
+        
+        <tr>
+          <td>SH600522</td>
+          <td>MACD 金叉</td>
+          <td class="v pos">+88.91%</td>
+          <td class="v pos">+253.27%</td>
+          <td class="v pos">1.993</td>
+          <td class="v neu">17.1%</td>
+          <td class="v pos">81%</td>
+          <td class="v">3.79</td>
+          <td class="v">16</td>
+          <td class="v">3,532,675</td>
+        </tr>
+        
+        <tr>
+          <td>SH600522</td>
+          <td>多信号投票 (≥3)</td>
+          <td class="v pos">+5.93%</td>
+          <td class="v pos">+12.10%</td>
+          <td class="v neu">0.302</td>
+          <td class="v neg">21.2%</td>
+          <td class="v pos">100%</td>
+          <td class="v">12.95</td>
+          <td class="v">1</td>
+          <td class="v">1,121,011</td>
+        </tr>
+        
+        <tr>
+          <td>SH600522</td>
+          <td>多信号投票 (≥2)</td>
+          <td class="v pos">+5.93%</td>
+          <td class="v pos">+12.10%</td>
+          <td class="v neu">0.302</td>
+          <td class="v neg">21.2%</td>
+          <td class="v pos">100%</td>
+          <td class="v">12.95</td>
+          <td class="v">1</td>
+          <td class="v">1,121,011</td>
+        </tr>
+        
+        <tr>
+          <td>SH601869</td>
+          <td>MA5/10 金叉</td>
+          <td class="v pos">+224.50%</td>
+          <td class="v pos">+933.53%</td>
+          <td class="v pos">2.427</td>
+          <td class="v neg">24.6%</td>
+          <td class="v pos">56%</td>
+          <td class="v">5.01</td>
+          <td class="v">27</td>
+          <td class="v">10,335,268</td>
+        </tr>
+        
+        <tr>
+          <td>SH601869</td>
+          <td>MACD 金叉</td>
+          <td class="v pos">+379.89%</td>
+          <td class="v pos">+2146.32%</td>
+          <td class="v pos">3.383</td>
+          <td class="v neu">14.9%</td>
+          <td class="v pos">87%</td>
+          <td class="v">24.13</td>
+          <td class="v">23</td>
+          <td class="v">22,463,190</td>
+        </tr>
+        
+        <tr>
+          <td>SH601869</td>
+          <td>多信号投票 (≥3)</td>
+          <td class="v pos">+268.88%</td>
+          <td class="v pos">+1232.79%</td>
+          <td class="v pos">2.588</td>
+          <td class="v neg">39.0%</td>
+          <td class="v pos">100%</td>
+          <td class="v">498.83</td>
+          <td class="v">2</td>
+          <td class="v">13,327,906</td>
+        </tr>
+        
+        <tr>
+          <td>SH601869</td>
+          <td>多信号投票 (≥2)</td>
+          <td class="v pos">+268.88%</td>
+          <td class="v pos">+1232.79%</td>
+          <td class="v pos">2.588</td>
+          <td class="v neg">39.0%</td>
+          <td class="v pos">100%</td>
+          <td class="v">498.83</td>
+          <td class="v">2</td>
+          <td class="v">13,327,906</td>
+        </tr>
+        
+        <tr>
+          <td>SH600487</td>
+          <td>MA5/10 金叉</td>
+          <td class="v pos">+113.51%</td>
+          <td class="v pos">+350.39%</td>
+          <td class="v pos">2.004</td>
+          <td class="v neg">28.4%</td>
+          <td class="v pos">56%</td>
+          <td class="v">5.04</td>
+          <td class="v">27</td>
+          <td class="v">4,503,897</td>
+        </tr>
+        
+        <tr>
+          <td>SH600487</td>
+          <td>MACD 金叉</td>
+          <td class="v pos">+139.22%</td>
+          <td class="v pos">+464.41%</td>
+          <td class="v pos">2.348</td>
+          <td class="v neu">18.9%</td>
+          <td class="v pos">52%</td>
+          <td class="v">9.06</td>
+          <td class="v">21</td>
+          <td class="v">5,644,111</td>
+        </tr>
+        
+        <tr>
+          <td>SH600487</td>
+          <td>多信号投票 (≥3)</td>
+          <td class="v pos">+12.75%</td>
+          <td class="v pos">+26.89%</td>
+          <td class="v pos">1.101</td>
+          <td class="v pos">3.2%</td>
+          <td class="v pos">100%</td>
+          <td class="v">28.54</td>
+          <td class="v">1</td>
+          <td class="v">1,268,919</td>
+        </tr>
+        
+        <tr>
+          <td>SH600487</td>
+          <td>多信号投票 (≥2)</td>
+          <td class="v pos">+12.75%</td>
+          <td class="v pos">+26.89%</td>
+          <td class="v pos">1.101</td>
+          <td class="v pos">3.2%</td>
+          <td class="v pos">100%</td>
+          <td class="v">28.54</td>
+          <td class="v">1</td>
+          <td class="v">1,268,919</td>
+        </tr>
+        
+        <tr>
+          <td>SH601138</td>
+          <td>MA5/10 金叉</td>
+          <td class="v pos">+132.82%</td>
+          <td class="v pos">+434.84%</td>
+          <td class="v pos">2.132</td>
+          <td class="v neg">33.5%</td>
+          <td class="v neg">48%</td>
+          <td class="v">8.40</td>
+          <td class="v">23</td>
+          <td class="v">5,348,427</td>
+        </tr>
+        
+        <tr>
+          <td>SH601138</td>
+          <td>MACD 金叉</td>
+          <td class="v pos">+143.79%</td>
+          <td class="v pos">+485.97%</td>
+          <td class="v pos">2.250</td>
+          <td class="v neu">20.0%</td>
+          <td class="v pos">68%</td>
+          <td class="v">3.64</td>
+          <td class="v">25</td>
+          <td class="v">5,859,718</td>
+        </tr>
+        
+        <tr>
+          <td>SH601138</td>
+          <td>多信号投票 (≥3)</td>
+          <td class="v pos">+111.79%</td>
+          <td class="v pos">+343.26%</td>
+          <td class="v pos">1.938</td>
+          <td class="v neg">40.4%</td>
+          <td class="v neg">0%</td>
+          <td class="v">0.00</td>
+          <td class="v">0</td>
+          <td class="v">4,432,588</td>
+        </tr>
+        
+        <tr>
+          <td>SH601138</td>
+          <td>多信号投票 (≥2)</td>
+          <td class="v pos">+111.79%</td>
+          <td class="v pos">+343.26%</td>
+          <td class="v pos">1.938</td>
+          <td class="v neg">40.4%</td>
+          <td class="v neg">0%</td>
+          <td class="v">0.00</td>
+          <td class="v">0</td>
+          <td class="v">4,432,588</td>
+        </tr>
+        
+        <tr>
+          <td>SH600584</td>
+          <td>MA5/10 金叉</td>
+          <td class="v pos">+111.25%</td>
+          <td class="v pos">+340.98%</td>
+          <td class="v pos">2.200</td>
+          <td class="v neg">20.8%</td>
+          <td class="v pos">61%</td>
+          <td class="v">2.87</td>
+          <td class="v">23</td>
+          <td class="v">4,409,798</td>
+        </tr>
+        
+        <tr>
+          <td>SH600584</td>
+          <td>MACD 金叉</td>
+          <td class="v pos">+140.09%</td>
+          <td class="v pos">+468.48%</td>
+          <td class="v pos">2.607</td>
+          <td class="v neu">14.7%</td>
+          <td class="v pos">82%</td>
+          <td class="v">8.53</td>
+          <td class="v">17</td>
+          <td class="v">5,684,798</td>
+        </tr>
+        
+        <tr>
+          <td>SH600584</td>
+          <td>多信号投票 (≥3)</td>
+          <td class="v neg">+0.00%</td>
+          <td class="v neg">+0.00%</td>
+          <td class="v neg">0.000</td>
+          <td class="v pos">0.0%</td>
+          <td class="v neg">0%</td>
+          <td class="v">0.00</td>
+          <td class="v">0</td>
+          <td class="v">1,000,000</td>
+        </tr>
+        
+        <tr>
+          <td>SH600584</td>
+          <td>多信号投票 (≥2)</td>
+          <td class="v neg">+0.00%</td>
+          <td class="v neg">+0.00%</td>
+          <td class="v neg">0.000</td>
+          <td class="v pos">0.0%</td>
+          <td class="v neg">0%</td>
+          <td class="v">0.00</td>
+          <td class="v">0</td>
+          <td class="v">1,000,000</td>
+        </tr>
+        </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title"><span class="num">4</span>结论</h2>
+    <div style="font-size:14px; color:#cbd5e1; line-height:1.85; margin-top:12px">
+      <p><b style="color:#f1f5f9">回测说明</b>：以上回测基于 westock 拉取的 ~2 年日 K 数据，
+      使用纯技术信号（MA/MACD/RSI/KDJ/BOLL），不包含基本面、资金流、板块动量等因子。
+      初始资金 100 万，手续费 0.1%，滑点 0.05%。</p>
+      <p style="margin-top:10px"><b style="color:#f1f5f9">重要提示</b>：
+      历史回测不等于未来收益。技术信号在震荡市中表现较差，在趋势市中表现较好。
+      实际交易还需结合基本面、资金面、市场情绪等多维度判断。</p>
+      <p style="margin-top:10px"><b style="color:#f1f5f9">下一步</b>：
+      1. 加入板块动量因子（近 30 日验证）
+      2. 加入资金流因子（龙虎榜/涨停池）
+      3. 多票组合再平衡
+      4. 参数敏感性分析</p>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    <b>⚠️ 重要免责声明</b><br>
+    本回测基于历史数据，不构成投资建议。技术信号在不同市场环境下表现差异大。
+    实际交易需结合最新行情与自身风险承受能力做决策。<b>市场有风险，决策需谨慎。</b>
+  </div>
+
+</div>
+<script>
+Chart.defaults.color='#94a3b8';
+Chart.defaults.borderColor='rgba(148,163,184,0.1)';
+Chart.defaults.font.family='-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+
+new Chart(document.getElementById('returnChart'), {
+  type: 'bar',
+  data: {
+    labels: ["MA5/10 \u91d1\u53c9", "MACD \u91d1\u53c9", "\u591a\u4fe1\u53f7\u6295\u7968 (\u22653)", "\u591a\u4fe1\u53f7\u6295\u7968 (\u22652)"],
+    datasets: [{"label": "SZ002281", "data": [148.32, 221.57, 63.88, 63.88], "backgroundColor": "#60a5fa", "borderRadius": 4}, {"label": "SZ000988", "data": [84.24, 134.89, 83.88, 83.88], "backgroundColor": "#f87171", "borderRadius": 4}, {"label": "SH600522", "data": [59.94, 88.91, 5.93, 5.93], "backgroundColor": "#4ade80", "borderRadius": 4}, {"label": "SH601869", "data": [224.5, 379.89, 268.88, 268.88], "backgroundColor": "#fbbf24", "borderRadius": 4}, {"label": "SH600487", "data": [113.51, 139.22, 12.75, 12.75], "backgroundColor": "#c084fc", "borderRadius": 4}, {"label": "SH601138", "data": [132.82, 143.79, 111.79, 111.79], "backgroundColor": "#06b6d4", "borderRadius": 4}, {"label": "SH600584", "data": [111.25, 140.09, 0.0, 0.0], "backgroundColor": "#f97316", "borderRadius": 4}]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top', labels: { color: '#e2e8f0', font: { size: 12 } } },
+      title: { display: true, text: '年化收益对比 (%)', color: '#f1f5f9', font: { size: 15, weight: 600 } }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(148,163,184,0.05)' } },
+      y: { grid: { color: 'rgba(148,163,184,0.05)' }, ticks: { callback: v => v + '%' } }
+    }
+  }
+});
+</script>
+</body></html>
