@@ -160,11 +160,34 @@ def _call_westock_args_safe(args):
     return _parse_markdown_table(text)
 
 
+def is_fresh(out_file: Path, max_age_hours: float = 1.0) -> bool:
+    """检查已有 JSON 是否足够新鲜（pulled_at 距今 < max_age_hours）。"""
+    if not out_file.exists():
+        return False
+    try:
+        d = json.loads(out_file.read_text(encoding="utf-8"))
+        pulled_at = d.get("pulled_at", "")
+        if not pulled_at:
+            return False
+        from datetime import datetime
+        pulled = datetime.strptime(pulled_at[:19], "%Y-%m-%d %H:%M:%S")
+        age_h = (datetime.now() - pulled).total_seconds() / 3600
+        return age_h < max_age_hours
+    except Exception:
+        return False
+
+
 def main():
-    data = pull()
     out_dir = PROJECT_ROOT / "reports"
     out_dir.mkdir(exist_ok=True)
     out_file = out_dir / f"long_form_{SYMBOL}.json"
+
+    # 数据新鲜度检查：1 小时内直接复用，超过则重新拉取
+    if is_fresh(out_file, max_age_hours=1.0):
+        print(f"[缓存命中] {out_file} 数据新鲜 (< 1h)，跳过拉取")
+        return 0
+
+    data = pull()
     out_file.write_text(
         json.dumps(data, ensure_ascii=False, indent=2, default=str),
         encoding="utf-8",
