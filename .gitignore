@@ -35,6 +35,7 @@ logs/
 # IDE
 .idea/
 .vscode/
+.worktrees/
 *.swp
 *.swo
 .DS_Store
