@@ -3,7 +3,7 @@
 调用约定：
 - 入口参数：chinaStock 内部约定（`SH600519`、`YYYY-MM-DD`）
 - 内部转换：经 `src.data_layer.symbols.to_akshare` 转为 6 位代码
-- AKShare 接口调用包在 try/except 中，失败时返回空 DataFrame 并打 warning
+- AKShare 接口调用包在 try/except 中，失败时抛出结构化 DataSourceError
 - 业务层不直接 import akshare，统一走此模块
 
 注意：AKShare 接口偶发返回字段名与文档不一致（同一接口不同时间可能改字段），
@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import pandas as pd
@@ -24,7 +23,7 @@ from src.data_layer.normalize import (
     normalize_sector_ohlcv,
 )
 from src.data_layer.symbols import to_akshare
-from src.data_sources.base import DataSource, SourceRole
+from src.data_sources.base import DataSource, DataSourceError, SourceRole
 
 try:
     import akshare as ak
@@ -33,17 +32,16 @@ except ImportError as e:  # pragma: no cover - 由 requirements.txt 锁定
 
 
 def _safe_call(func, *args, **kwargs) -> pd.DataFrame:
-    """包装 AKShare 调用：失败时返回空 DataFrame + warning，避免污染业务层。"""
+    """包装 AKShare 调用，区分合法空结果与外部调用失败。"""
     try:
         result = func(*args, **kwargs)
-        if result is None:
-            return pd.DataFrame()
-        if isinstance(result, pd.DataFrame):
-            return result
-        return pd.DataFrame(result)
-    except Exception as e:  # noqa: BLE001 — 故意吞所有异常打 warning
-        warnings.warn(f"AKShare 调用 {func.__name__} 失败: {e}", stacklevel=2)
+    except Exception as exc:  # noqa: BLE001 - 转换为统一的数据源边界异常
+        raise DataSourceError("akshare", func.__name__, str(exc)) from exc
+    if result is None:
         return pd.DataFrame()
+    if isinstance(result, pd.DataFrame):
+        return result
+    return pd.DataFrame(result)
 
 
 class AkShareSource(DataSource):

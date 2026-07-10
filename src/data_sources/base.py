@@ -20,6 +20,16 @@ class SourceRole(str, Enum):
     VALIDATION = "validation"  # 交叉验证用
 
 
+class DataSourceError(RuntimeError):
+    """External provider failed; this is not a successful empty dataset."""
+
+    def __init__(self, source: str, operation: str, detail: str):
+        self.source = source
+        self.operation = operation
+        self.detail = detail
+        super().__init__(f"{source}.{operation}: {detail}")
+
+
 class DataSource(ABC):
     """所有数据源必须实现的接口。"""
 
@@ -75,4 +85,4 @@ class DataSource(ABC):
         """
 
 
-__all__ = ["DataSource", "SourceRole"]
+__all__ = ["DataSource", "DataSourceError", "SourceRole"]

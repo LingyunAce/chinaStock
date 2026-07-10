@@ -18,14 +18,12 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import pandas as pd
 
+from src.data_sources.base import DataSourceError
 from src.data_sources.westock_source import _call_westock, _parse_markdown_table
-
-warnings.filterwarnings("ignore")
 
 _CACHE_INDUSTRY: pd.DataFrame | None = None
 _CACHE_TTL_SECONDS = 300  # 5 分钟
@@ -49,9 +47,8 @@ def fetch_industry_snapshot(force: bool = False) -> pd.DataFrame:
 
     try:
         text = _call_westock(["hot", "board", "--limit", "100"], timeout=15)
-    except Exception as e:  # noqa: BLE001
-        warnings.warn(f"sector_momentum: hot board 拉取失败: {e}", stacklevel=2)
-        return pd.DataFrame()
+    except Exception as exc:  # noqa: BLE001 - 转换为统一的数据源边界异常
+        raise DataSourceError("westock", "hot_board", str(exc)) from exc
     df = _parse_markdown_table(text)
     if df.empty:
         return df

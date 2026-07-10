@@ -16,14 +16,12 @@
 from __future__ import annotations
 
 import time
-import warnings
 from typing import Any
 
 import pandas as pd
 
+from src.data_sources.base import DataSourceError
 from src.data_sources.westock_source import _call_westock, _parse_markdown_table
-
-warnings.filterwarnings("ignore")
 
 _CACHE_HOT: tuple[float, pd.DataFrame] | None = None
 _CACHE_LHB: dict[str, tuple[float, pd.DataFrame]] = {}
@@ -63,9 +61,8 @@ def fetch_hot_stock(force: bool = False) -> pd.DataFrame:
         return _CACHE_HOT[1]
     try:
         text = _call_westock(["hot", "stock", "--limit", "30"], timeout=15)
-    except Exception as e:  # noqa: BLE001
-        warnings.warn(f"capital_flow: hot stock 拉取失败: {e}", stacklevel=2)
-        return pd.DataFrame()
+    except Exception as exc:  # noqa: BLE001 - 转换为统一的数据源边界异常
+        raise DataSourceError("westock", "hot_stock", str(exc)) from exc
     df = _parse_markdown_table(text)
     if df.empty:
         return df
@@ -94,9 +91,8 @@ def fetch_lhb(westock_code: str, force: bool = False) -> pd.DataFrame:
     yesterday = datetime_to_yyyymmdd()
     try:
         text = _call_westock(["lhb", "--tab", "jg", "--date", yesterday], timeout=15)
-    except Exception as e:  # noqa: BLE001
-        warnings.warn(f"capital_flow: lhb 拉取失败: {e}", stacklevel=2)
-        return pd.DataFrame()
+    except Exception as exc:  # noqa: BLE001 - 转换为统一的数据源边界异常
+        raise DataSourceError("westock", "lhb", str(exc)) from exc
     df = _parse_markdown_table(text)
     if df.empty:
         _CACHE_LHB[westock_code] = (now, df)
