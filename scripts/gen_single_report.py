@@ -21,6 +21,10 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.analysis.advice import Advice, AdviceAction, generate_advice  # noqa: E402
+from src.analysis.trust import AnalysisTrust, TrustStatus  # noqa: E402
+from src.data_layer.quality import QualityIssue  # noqa: E402
+
 
 # ============ Colors / Labels ============
 BULL = "#22c55e"
@@ -43,6 +47,72 @@ def _f(x, default=0.0):
 
 def fmt_pct(v):
     return f"{v:+.2f}%" if v is not None else "—"
+
+
+def _trust_from_snapshot(d: dict) -> AnalysisTrust:
+    raw = d.get("_trust")
+    if raw:
+        return AnalysisTrust.from_dict(raw)
+    return AnalysisTrust(
+        TrustStatus.BLOCKED,
+        (QualityIssue("missing_trust", "缺少可信状态", critical=True),),
+        (),
+        datetime.now().astimezone().isoformat(timespec="seconds"),
+    )
+
+
+def render_trust_banner(trust: AnalysisTrust) -> str:
+    issues = "".join(
+        f"<li>{html.escape(issue.code)}: {html.escape(issue.message)}</li>"
+        for issue in trust.issues
+    ) or "<li>无质量问题</li>"
+    sources = "".join(
+        "<tr>"
+        f"<td>{html.escape(item.source)}</td>"
+        f"<td>{html.escape(item.dataset)}</td>"
+        f"<td>{html.escape(item.status)}</td>"
+        f"<td>{item.row_count}</td>"
+        f"<td>{html.escape(item.adjustment or '—')}</td>"
+        "</tr>"
+        for item in trust.source_manifest
+    ) or '<tr><td colspan="5">无来源清单</td></tr>'
+    return f"""
+    <section class="section trust-{trust.status.value}">
+      <h2>数据可信状态：{trust.status.value}</h2>
+      <p>检查时间：{html.escape(trust.checked_at)}</p>
+      <ul>{issues}</ul>
+      <table class="matrix"><tr><th>来源</th><th>数据集</th><th>状态</th><th>行数</th><th>复权</th></tr>{sources}</table>
+    </section>
+    """
+
+
+def render_advice_section(advice: Advice | None, trust: AnalysisTrust) -> str:
+    disclaimer = "结论是规则化研究信号，不构成收益保证或投资承诺。"
+    if advice is None:
+        return f"""
+        <section class="section advice-blocked" data-advice-action="none">
+          <h2>数据不足，禁止形成买卖结论</h2>
+          <p>请先修复报告列出的数据完整性、时效性或来源错误。</p>
+          <p>{disclaimer}</p>
+        </section>
+        """
+    labels = {
+        AdviceAction.BUY: "买入",
+        AdviceAction.HOLD: "持有",
+        AdviceAction.REDUCE: "减仓",
+        AdviceAction.SELL: "卖出",
+        AdviceAction.WATCH: "观望",
+    }
+    support = "".join(f"<li>{html.escape(item)}</li>" for item in advice.supporting_evidence)
+    risks = "".join(f"<li>{html.escape(item)}</li>" for item in advice.risk_evidence) or "<li>无额外风险证据</li>"
+    invalidation = "".join(f"<li>{html.escape(item)}</li>" for item in advice.invalidation_conditions)
+    return f"""
+    <section class="section advice-trusted" data-advice-action="{advice.action.value}">
+      <h2>操作结论：{labels[advice.action]}</h2><p>数据截止：{html.escape(advice.as_of)}</p>
+      <h3>支持证据</h3><ul>{support}</ul><h3>风险证据</h3><ul>{risks}</ul>
+      <h3>失效条件</h3><ul>{invalidation}</ul><p>{disclaimer}</p>
+    </section>
+    """
 
 
 # ============ 评分 ============
@@ -74,59 +144,29 @@ def calc_score(d: dict) -> dict:
     cons = d.get("consensus", {})
     tp = cons.get("target_price")
     k = d.get("kline", {}).get("head", [])
-    cur = _f(k[0].get("close")) if k else 0
+    cur = _f(k[-1].get("close")) if k else 0
     upside = ((tp - cur) / cur * 100) if (tp and cur > 0) else 0
     val_score = round(min(100, max(0, 50 + upside)))
 
-    # 3. 板块动量
-    try:
-        from src.factors.sector_momentum import evaluate as sector_eval
+    # 3/4. 报告只消费快照，不在渲染阶段访问网络
+    sector_result = d.get("sector_momentum") or {}
+    sector_score = _f(sector_result.get("score"), 50)
+    sector_meta = {
+        "industry": sector_result.get("industry", "—"),
+        "zdf": sector_result.get("industry_zdf"),
+        "rank": sector_result.get("industry_rank"),
+        "is_hot": sector_result.get("is_sector_hot", False),
+        "top10": sector_result.get("top10_industries", []),
+    }
 
-        sector_result = sector_eval(d.get("profile", {}))
-        sector_score = sector_result["score"]
-        sector_meta = {
-            "industry": sector_result["industry"],
-            "zdf": sector_result["industry_zdf"],
-            "rank": sector_result["industry_rank"],
-            "is_hot": sector_result["is_sector_hot"],
-            "top10": sector_result["top10_industries"],
-        }
-    except Exception:  # noqa: BLE001
-        sector_score = 50
-        sector_meta = {
-            "industry": "—",
-            "zdf": None,
-            "rank": None,
-            "is_hot": False,
-            "top10": [],
-        }
-
-    # 4. 资金流
-    try:
-        from src.factors.capital_flow import evaluate as flow_eval
-
-        westock_code = (d.get("profile", {}).get("code") or "").lower()
-        if not westock_code:
-            # 从 SYMBOL 反推
-            from scripts.gen_single_report import SYMBOL  # type: ignore
-
-            westock_code = SYMBOL.lower()
-        flow_result = flow_eval(westock_code)
-        flow_score = flow_result["score"]
-        flow_meta = {
-            "is_on_lhb": flow_result["is_on_lhb"],
-            "is_limit_up": flow_result["is_limit_up"],
-            "hot_rank": flow_result["hot_rank"],
-            "reason": flow_result["reason"],
-        }
-    except Exception:  # noqa: BLE001
-        flow_score = 50
-        flow_meta = {
-            "is_on_lhb": False,
-            "is_limit_up": False,
-            "hot_rank": None,
-            "reason": "",
-        }
+    flow_result = d.get("capital_flow") or {}
+    flow_score = _f(flow_result.get("score"), 50)
+    flow_meta = {
+        "is_on_lhb": flow_result.get("is_on_lhb", False),
+        "is_limit_up": flow_result.get("is_limit_up", False),
+        "hot_rank": flow_result.get("hot_rank"),
+        "reason": flow_result.get("reason", ""),
+    }
 
     # 综合 (权重调整: 业绩 35% / 估值 25% / 板块 20% / 资金 20%)
     total = round(
@@ -613,7 +653,8 @@ def render_metrics_grid(d, score):
     fs = d.get("finance_summary", {}).get("head", [])
     last = fs[-1] if fs else {}
     cons = d.get("consensus", {})
-    rating = d.get("rating", {}).get("head", [{}])[0]
+    rating_list = d.get("rating", {}).get("head", [])
+    rating = rating_list[0] if rating_list else {}
     buy = rating.get("rating_buy", 0) or 0
     inc = rating.get("rating_inc", 0) or 0
     cards = f"""
@@ -1124,6 +1165,7 @@ def _safe_filename(text: str) -> str:
 
 
 def build_html(d: dict) -> str:
+    trust = _trust_from_snapshot(d)
     score = calc_score(d)
     if score["total"] >= 60:
         sentiment_color = BULL
@@ -1297,11 +1339,24 @@ def build_html(d: dict) -> str:
     )
     conclusions = "\n".join(conclusions_parts)
 
+    rsi6 = _f(d.get("technical_rsi", {}).get("head", [{}])[0].get("rsi.RSI_6"))
+    advice = None
+    if trust.can_advise and score["cur"] > 0:
+        advice = generate_advice(
+            trust=trust,
+            as_of=d.get("pulled_at", "")[:10],
+            total_score=score["total"],
+            current_price=score["cur"],
+            target_price=score["tp"],
+            rsi=rsi6,
+        )
+
     parts = [
         HTML_HEAD.replace("__TITLE__", f"{html.escape(name)} ({html.escape(symbol)})")
         .replace("__NAME__", html.escape(name))
         .replace("__SYMBOL__", html.escape(symbol)),
         render_header(d, score, sentiment_color, sentiment_label),
+        render_trust_banner(trust),
         render_score_section(score, sentiment_color, sentiment_label, score_narrative),
         render_metrics_grid(d, score),
         render_kline_chart(d),
@@ -1311,8 +1366,9 @@ def build_html(d: dict) -> str:
         render_consensus(d, score),
         render_news(d),
         render_reports(d),
-        render_strategy(d, score, narrative_strategies),
-        render_conclusion(score, conclusions),
+        render_advice_section(advice, trust),
+        render_strategy(d, score, narrative_strategies) if advice is not None else "",
+        render_conclusion(score, conclusions) if advice is not None else "",
         DISCLAIMER.replace("__DATE__", datetime.now().strftime("%Y-%m-%d")),
         "</div></body></html>",
     ]
