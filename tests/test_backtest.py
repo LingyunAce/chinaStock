@@ -116,3 +116,9 @@ def test_insufficient_cash_is_recorded():
 
     assert result["trades"] == []
     assert result["rejected_orders"][0]["reason"] == "insufficient_cash"
+
+
+def test_backtest_metric_formatter_marks_none_as_insufficient_sample():
+    from scripts.run_backtest import format_metric
+
+    assert format_metric(None, suffix="%") == "样本不足"

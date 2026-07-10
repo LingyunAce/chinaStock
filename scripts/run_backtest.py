@@ -13,13 +13,11 @@ import argparse
 import html
 import json
 import sys
-import warnings
 from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
-warnings.filterwarnings("ignore")
 
 import pandas as pd  # noqa: E402
 
@@ -153,6 +151,12 @@ body {
 """
 
 
+def format_metric(value: float | None, *, suffix: str = "") -> str:
+    if value is None:
+        return "样本不足"
+    return f"{value:.2f}{suffix}"
+
+
 def run_all_backtests(
     data: dict[str, pd.DataFrame],
     strategies: dict | None = None,
@@ -177,7 +181,10 @@ def run_all_backtests(
                 r["strategy"] = strat_name
                 results.append(r)
                 print(
-                    f"  [{done}/{total}] {sym} × {strat_name}: 年化 {r['annual_return']:+.2f}%  Sharpe {r['sharpe']:.3f}  最大回撤 {r['max_drawdown']:.1f}%"
+                    f"  [{done}/{total}] {sym} × {strat_name}: "
+                    f"年化 {format_metric(r['annual_return'], suffix='%')}  "
+                    f"Sharpe {format_metric(r['sharpe'])}  "
+                    f"最大回撤 {r['max_drawdown']:.1f}%"
                 )
             except Exception as e:
                 print(f"  [{done}/{total}] {sym} × {strat_name}: 失败 - {e}")
@@ -202,33 +209,39 @@ def generate_report(
         sym = r["symbol"]
         if (
             sym not in best_by_symbol
-            or r["annual_return"] > best_by_symbol[sym]["annual_return"]
+            or (r["annual_return"] if r["annual_return"] is not None else r["total_return"])
+            > (
+                best_by_symbol[sym]["annual_return"]
+                if best_by_symbol[sym]["annual_return"] is not None
+                else best_by_symbol[sym]["total_return"]
+            )
         ):
             best_by_symbol[sym] = r
 
     # 汇总表
     rows = []
     for r in results:
-        ret_cls = "pos" if r["annual_return"] > 0 else "neg"
+        rank_return = r["annual_return"] if r["annual_return"] is not None else r["total_return"]
+        ret_cls = "pos" if rank_return > 0 else "neg"
         dd_cls = (
             "neg"
             if r["max_drawdown"] > 20
             else ("neu" if r["max_drawdown"] > 10 else "pos")
         )
         sharpe_cls = (
-            "pos" if r["sharpe"] > 0.5 else ("neu" if r["sharpe"] > 0 else "neg")
+            "pos" if (r["sharpe"] or 0) > 0.5 else ("neu" if (r["sharpe"] or 0) > 0 else "neg")
         )
-        win_cls = "pos" if r["win_rate"] > 50 else "neg"
+        win_cls = "pos" if (r["win_rate"] or 0) > 50 else "neg"
         rows.append(f"""
         <tr>
           <td>{html.escape(r["symbol"])}</td>
           <td>{html.escape(r["strategy"])}</td>
-          <td class="v {ret_cls}">{r["annual_return"]:+.2f}%</td>
+          <td class="v {ret_cls}">{format_metric(r["annual_return"], suffix="%")}</td>
           <td class="v {ret_cls}">{r["total_return"]:+.2f}%</td>
-          <td class="v {sharpe_cls}">{r["sharpe"]:.3f}</td>
+          <td class="v {sharpe_cls}">{format_metric(r["sharpe"])}</td>
           <td class="v {dd_cls}">{r["max_drawdown"]:.1f}%</td>
-          <td class="v {win_cls}">{r["win_rate"]:.0f}%</td>
-          <td class="v">{r["profit_loss_ratio"]:.2f}</td>
+          <td class="v {win_cls}">{format_metric(r["win_rate"], suffix="%")}</td>
+          <td class="v">{format_metric(r["profit_loss_ratio"])}</td>
           <td class="v">{r["total_trades"]}</td>
           <td class="v">{r["final_value"]:,.0f}</td>
         </tr>

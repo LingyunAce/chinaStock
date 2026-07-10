@@ -152,9 +152,14 @@ def main() -> int:
             ["date", "close", "volume"]
         ].copy()
         ws_norm.columns = ["date", "close_ws", "volume_ws"]
+        ws_norm["close_ws"] = pd.to_numeric(ws_norm["close_ws"], errors="coerce")
+        ws_norm["volume_ws"] = pd.to_numeric(ws_norm["volume_ws"], errors="coerce")
         if "close" in kline_ak.columns:
             ak_norm = kline_ak[["date", "close"]].copy()
             ak_norm.columns = ["date", "close_ak"]
+            ak_norm["close_ak"] = pd.to_numeric(
+                ak_norm["close_ak"], errors="coerce"
+            )
             merged = ws_norm.merge(ak_norm, on="date", how="inner")
             if not merged.empty:
                 merged["diff_pct"] = (
