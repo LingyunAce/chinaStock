@@ -22,7 +22,7 @@ from src.data_layer.normalize import (
     normalize_sector_constituents,
     normalize_sector_ohlcv,
 )
-from src.data_layer.symbols import to_akshare
+from src.data_layer.symbols import to_akshare, to_chinastock
 from src.data_sources.base import DataSource, DataSourceError, SourceRole
 
 try:
@@ -54,6 +54,30 @@ class AkShareSource(DataSource):
 
     role: SourceRole = SourceRole.SUPPLEMENTARY
     name: str = "akshare"
+
+    def get_kline(
+        self,
+        symbol: str,
+        start: str,
+        end: str,
+        *,
+        adjust: str = "qfq",
+    ) -> pd.DataFrame:
+        """Return adjusted daily A-share OHLCV in canonical columns."""
+
+        raw = _safe_call(
+            ak.stock_zh_a_hist,
+            symbol=to_akshare(symbol),
+            period="daily",
+            start_date=start.replace("-", ""),
+            end_date=end.replace("-", ""),
+            adjust=adjust,
+        )
+        if raw.empty:
+            return raw
+        out = normalize_sector_ohlcv(raw)
+        out["symbol"] = to_chinastock(symbol)
+        return out.sort_values("date").reset_index(drop=True)
 
     # ---------------------- 龙虎榜 ----------------------
     def get_lhb(self, symbol: str | None, date: str, **kw: Any) -> pd.DataFrame:
@@ -125,42 +149,14 @@ class AkShareSource(DataSource):
         self, symbol: str, date: str, **kw: Any
     ) -> pd.DataFrame:
         """拉 AKShare 个股日 K（与 westock 同口径），用于跨源数据校验。"""
-        code = to_akshare(symbol)
         end_dt = pd.Timestamp(date)
         start_dt = end_dt - pd.Timedelta(days=5)
-        raw = _safe_call(
-            ak.stock_zh_a_hist,
-            symbol=code,
-            period="daily",
-            start_date=start_dt.strftime("%Y%m%d"),
-            end_date=end_dt.strftime("%Y%m%d"),
+        out = self.get_kline(
+            symbol,
+            start_dt.strftime("%Y-%m-%d"),
+            end_dt.strftime("%Y-%m-%d"),
             adjust="qfq",
         )
-        if raw.empty:
-            return raw
-        # 归一化：用通用重命名（见 normalize_sector_ohlcv 的列名表已够用）
-        from src.data_layer.symbols import to_chinastock
-
-        out = raw.rename(
-            columns={
-                "日期": "date",
-                "开盘": "open",
-                "收盘": "close",
-                "最高": "high",
-                "最低": "low",
-                "成交量": "volume",
-                "成交额": "amount",
-                "振幅": "amplitude",
-                "涨跌幅": "pct_change",
-                "涨跌额": "change_amount",
-                "换手率": "turnover",
-            }
-        )
-        if "date" in out.columns:
-            out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.strftime(
-                "%Y-%m-%d"
-            )
-        out["symbol"] = to_chinastock(symbol)
         return out
 
 
